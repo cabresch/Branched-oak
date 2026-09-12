@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b2a3f">
+<title>Branched Oak Sailing</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root {
+    --bg: #0b2a3f; --panel: #10344d; --panel2: #164461; --text: #eaf2f8; --muted: #9db4c6;
+    --accent: #ffcc4d; --danger: #ff5a5a; --ok: #5fd38d; --line: #234f6e;
+    --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overscroll-behavior: none; }
+  #app { position: fixed; inset: 0; display: flex; flex-direction: column; }
+  header { padding: calc(var(--safe-top) + 8px) 14px 8px; background: var(--panel); display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .2px; flex: 1; }
+  #windchip { font-size: 13px; color: var(--muted); white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+  #windchip .arrow { display: inline-block; width: 16px; height: 16px; transform-origin: 50% 50%; }
+  main { flex: 1; position: relative; overflow: hidden; }
+  .view { position: absolute; inset: 0; display: none; overflow: auto; -webkit-overflow-scrolling: touch; }
+  .view.active { display: block; }
+  #map { position: absolute; inset: 0; background: #08202f; }
+  nav { display: flex; background: var(--panel); border-top: 1px solid var(--line); padding-bottom: var(--safe-bottom); }
+  nav button { flex: 1; background: none; border: 0; color: var(--muted); padding: 10px 4px 8px; font-size: 12px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  nav button.active { color: var(--accent); }
+  nav button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* map overlays */
+  .mapbtns { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 8px; z-index: 500; }
+  .mapbtns button, .fab { background: rgba(16,52,77,.92); color: var(--text); border: 1px solid var(--line); border-radius: 10px; width: 44px; height: 44px; font-size: 13px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+  .mapbtns button.on { background: var(--accent); color: #1a1a1a; border-color: var(--accent); }
+  .mapbtns button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  #hud { position: absolute; left: 10px; bottom: 10px; z-index: 500; background: rgba(16,52,77,.92); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 13px; line-height: 1.35; min-width: 150px; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+  #hud b { font-size: 20px; font-weight: 600; }
+  #hud .sub { color: var(--muted); }
+  #hud .rec { color: var(--danger); font-weight: 600; }
+  .legends { position: absolute; left: 10px; top: 10px; z-index: 500; display: flex; flex-direction: column; gap: 4px; max-width: calc(100% - 80px); }
+  #legend, #windlegend { background: rgba(16,52,77,.88); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: 11px; display: flex; gap: 7px; flex-wrap: wrap; }
+  #legend span, #windlegend span { display: flex; align-items: center; gap: 3px; }
+  #legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; }
+  #windlegend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+  #windlegend .lbl { color: var(--muted); }
+  #windcanvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 450; }
+  .zoombtns { position: absolute; right: 10px; bottom: 34px; z-index: 500; display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+  .zoombtns button { background: rgba(16,52,77,.92); color: var(--text); border: 0; width: 44px; height: 44px; font-size: 24px; line-height: 1; }
+  .zoombtns button:first-child { border-bottom: 1px solid var(--line); }
+  #nudge { position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px; z-index: 600; background: rgba(16,52,77,.96); border: 1px solid var(--accent); border-radius: 12px; padding: 10px 12px; box-shadow: 0 2px 12px rgba(0,0,0,.45); width: min(92%, 300px); }
+  .nudge-title { font-size: 13px; margin-bottom: 8px; }
+  .nudge-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; align-items: center; justify-items: center; }
+  .nudge-grid button[data-n] { width: 52px; height: 44px; font-size: 22px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; }
+  #sheet { position: fixed; inset: 0; z-index: 900; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; }
+  .sheet-box { background: var(--panel); border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; padding: 16px 16px calc(var(--safe-bottom) + 16px); width: 100%; max-height: 90%; overflow: auto; }
+  .sheet-box h2 { font-size: 17px; margin: 0 0 10px; }
+  .sheet-box label { display: block; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .sheet-box input, .sheet-box textarea { margin-top: 4px; }
+  #sheet-story { min-height: 140px; }
+  .markitem .story { color: var(--text); font-size: 14px; white-space: pre-wrap; margin-top: 6px; }
+  .markitem .story.clamp { max-height: 4.2em; overflow: hidden; }
+  .linkbtn { background: none; border: 0; color: var(--accent); padding: 0; font-size: 13px; }
+  #status { position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px; z-index: 500; background: rgba(0,0,0,.6); color: #fff; padding: 6px 12px; border-radius: 20px; font-size: 12px; pointer-events: none; opacity: 0; transition: opacity .3s; white-space: nowrap; max-width: 90%; overflow: hidden; text-overflow: ellipsis; }
+  #status.show { opacity: 1; }
+  .leaflet-popup-content-wrapper { background: var(--panel); color: var(--text); border-radius: 10px; }
+  .leaflet-popup-tip { background: var(--panel); }
+  .leaflet-popup-content { margin: 10px 14px; font-size: 14px; }
+  .leaflet-popup-content button { margin-top: 6px; margin-right: 6px; }
+  .leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
+  .leaflet-control-attribution { font-size: 9px; background: rgba(255,255,255,.7); }
+  .pos-dot { width: 16px; height: 16px; border-radius: 50%; background: #2f8bff; border: 3px solid #fff; box-shadow: 0 0 0 2px rgba(47,139,255,.5); }
+  .pos-heading { width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 18px solid #2f8bff; transform-origin: 50% 100%; margin-left: -8px; margin-top: -26px; opacity: .9; }
+  .mark-pin { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2px solid #1a1a1a; }
+  .depth-label { background: none; border: 0; box-shadow: none; color: #fff; font-size: 11px; font-weight: 600; text-shadow: 0 0 3px #000, 0 0 3px #000; white-space: nowrap; }
+
+  /* panels */
+  .panel { padding: 14px 14px calc(var(--safe-bottom) + 20px); }
+  .panel h2 { font-size: 17px; margin: 6px 0 10px; font-weight: 600; }
+  .panel h3 { font-size: 14px; margin: 18px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .row .grow { flex: 1; }
+  .big { font-size: 34px; font-weight: 600; line-height: 1.1; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  button.btn, label.btn { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; font-size: 14px; cursor: pointer; }
+  button.btn.primary { background: var(--accent); color: #1a1a1a; border-color: var(--accent); font-weight: 600; }
+  button.btn.danger { color: var(--danger); }
+  button.btn.sm { padding: 6px 10px; font-size: 13px; }
+  input[type=text], textarea { width: 100%; background: #0d2c42; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font-size: 15px; }
+  textarea { min-height: 60px; resize: vertical; font: inherit; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td, th { padding: 7px 4px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  tr.now td { background: rgba(255,204,77,.12); }
+  .arrow-sm { display: inline-block; width: 14px; height: 14px; vertical-align: -2px; }
+  .gust-hi { color: var(--danger); font-weight: 600; }
+  .chk { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .chk:last-child { border-bottom: 0; }
+  .chk input[type=checkbox] { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--accent); }
+  .chk span { flex: 1; }
+  .chk.done span { color: var(--muted); text-decoration: line-through; }
+  .chk .x { color: var(--muted); background: none; border: 0; font-size: 18px; padding: 0 4px; }
+  .addrow { display: flex; gap: 8px; margin-top: 10px; }
+  .addrow input { flex: 1; }
+  .markitem { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .markitem:last-child { border-bottom: 0; }
+  .markitem .name { font-weight: 600; }
+  .markitem .note { color: var(--muted); font-size: 13px; white-space: pre-wrap; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 12px; }
+  .hidden { display: none !important; }
+  .warn { color: var(--accent); }
+  input[type=file] { display: none; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Branched Oak Sailing</h1>
+    <div id="windchip"><span class="muted">wind</span> <span id="chipval">…</span> <svg class="arrow" id="chiparrow" viewBox="0 0 24 24"><path d="M12 3 L18 21 L12 16 L6 21 Z" fill="currentColor"/></svg></div>
+  </header>
+  <main>
+    <section class="view active" id="view-map">
+      <div id="map"></div>
+      <canvas id="windcanvas"></canvas>
+      <div class="legends">
+        <div id="legend"></div>
+        <div id="windlegend"></div>
+      </div>
+      <div class="mapbtns">
+        <button id="btn-locate" title="Center on me"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+        <button id="btn-track" title="Start or stop track recording"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/></svg></button>
+        <button id="btn-mark" title="Drop a mark"><svg viewBox="0 0 24 24"><path d="M12 22s7-7 7-12a7 7 0 0 0-14 0c0 5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg></button>
+        <button id="btn-layer" title="Switch basemap"><svg viewBox="0 0 24 24"><path d="M12 3 2 8l10 5 10-5-10-5z"/><path d="M2 13l10 5 10-5"/><path d="M2 18l10 5 10-5"/></svg></button>
+        <button id="btn-wind" class="on" title="Show or hide wind animation"><svg viewBox="0 0 24 24"><path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 12h15a3 3 0 1 1-3 3"/><path d="M3 16h8a2 2 0 1 1-2 2"/></svg></button>
+      </div>
+      <div class="zoombtns">
+        <button id="btn-zin" title="Zoom in">+</button>
+        <button id="btn-zout" title="Zoom out">&minus;</button>
+      </div>
+      <div id="nudge" class="hidden">
+        <div class="nudge-title">Nudge <b id="nudge-name"></b> <span class="small muted">(2 m per tap, or drag the pin)</span></div>
+        <div class="nudge-grid">
+          <span></span><button data-n="0,1">&uarr;</button><span></span>
+          <button data-n="-1,0">&larr;</button><button id="nudge-done" class="btn primary sm">Done</button><button data-n="1,0">&rarr;</button>
+          <span></span><button data-n="0,-1">&darr;</button><button id="nudge-cancel" class="btn sm">Cancel</button>
+        </div>
+      </div>
+      <div id="hud">
+        <div><b id="hud-sog">–</b> <span class="sub">kn</span> &nbsp; <b id="hud-cog">–</b><span class="sub">°</span></div>
+        <div class="sub" id="hud-sub">GPS off</div>
+      </div>
+      <div id="status"></div>
+    </section>
+
+    <section class="view" id="view-wind">
+      <div class="panel">
+        <h2>Wind and weather at the lake</h2>
+        <div class="card" id="wind-now">Loading…</div>
+        <h3>Hourly</h3>
+        <div class="card" style="padding:4px 10px; overflow-x:auto"><table id="wind-table"></table></div>
+        <p class="small muted">Forecast from Open-Meteo for the lake's coordinates (40.975, -96.870). Wind at 10 m in knots, direction is where the wind comes from. Gusts over 20 kn are highlighted. Sailing decisions are yours; this is a model forecast, not an observation.</p>
+      </div>
+    </section>
+
+    <section class="view" id="view-marks">
+      <div class="panel">
+        <h2>Marks and tracks</h2>
+        <div class="toolbar">
+          <button class="btn sm" id="btn-share-marks">Share marks</button>
+          <label class="btn sm">Import marks<input type="file" id="file-marks" accept=".json,application/json"></label>
+        </div>
+        <div class="card" id="marks-list"><span class="muted">No marks yet. On the map, tap the pin button or press and hold on the water.</span></div>
+        <h3>Saved tracks</h3>
+        <div class="card" id="tracks-list"><span class="muted">No tracks yet. Tap the record button on the map to start one.</span></div>
+        <p class="small muted">Marks and tracks are stored on this phone only. Use Share marks to send a file to another phone, then Import it there.</p>
+      </div>
+    </section>
+
+    <section class="view" id="view-lists">
+      <div class="panel">
+        <h2>Checklists</h2>
+        <div id="lists"></div>
+        <div class="toolbar"><button class="btn sm" id="btn-reset-lists">Reset all checkboxes</button> <button class="btn sm danger" id="btn-restore-lists">Restore default lists</button></div>
+        <p class="small muted">Lists are editable and saved on this phone. They are starters written for Buen Camino in her slip at Branched Oak; edit them as you learn what matters. Items marked (C22 manual) come from the Catalina 22 Technical Manual (2001), Checklists chapter. Motor items should follow the Honda owner's manual.</p>
+      </div>
+    </section>
+
+    <section class="view" id="view-info">
+      <div class="panel">
+        <h2>About the depth map</h2>
+        <div class="card">
+          <p>Depth contours come from the Nebraska Game and Parks Commission lake bathymetry program (Lake Contours layer on NebraskaMap), surveyed with the U.S. Bureau of Reclamation. Branched Oak has ten contours at 3 foot intervals, 3 ft to 30 ft.</p>
+          <p>Depths are referenced to the survey pool. In the data, the 3 ft contour sits at elevation 1281.0 ft, which puts the survey water surface at about 1284 ft. If the lake is below that level, actual depth is less than the contour shows.</p>
+          <p><b>Buen Camino draws 2.5 ft</b> (wing keel). The <span style="color:#ff5a5a;font-weight:600">3 ft line</span> is drawn in red: inside it you have about 6 inches under the keel at survey pool, and less if the lake is down. The <span style="color:#ff9f40;font-weight:600">6 ft line</span> is orange.</p>
+          <p>Contours load from the Game and Parks service when online and are cached on this phone so the map still works with weak signal. Basemap tiles need signal unless recently viewed.</p>
+        </div>
+        <h3>GPS and screen</h3>
+        <div class="card">
+          <p>Recording a track asks the phone to keep the screen on (a wake lock). Tracking pauses if you switch apps or lock the phone; it resumes when you come back. Keep the phone mounted with this page open while underway.</p>
+          <p>Add this page to your home screen for a full-screen view: Safari share menu, then Add to Home Screen.</p>
+        </div>
+        <h3>Data status</h3>
+        <div class="card small" id="datastatus">…</div>
+        <p class="small muted">Basemap: Esri World Imagery, OpenStreetMap contributors. Contours: Nebraska Game and Parks Commission. Weather: Open-Meteo. Map library: Leaflet.</p>
+      </div>
+    </section>
+  </main>
+  <div id="sheet" class="hidden">
+    <div class="sheet-box">
+      <h2 id="sheet-title">New mark</h2>
+      <label>Mark name<input type="text" id="sheet-name" placeholder="for example: shoal, anchorage, the good cove"></label>
+      <label>Note<input type="text" id="sheet-note" placeholder="optional, short"></label>
+      <label>Story<textarea id="sheet-story" placeholder="optional, as long as you like"></textarea></label>
+      <div class="small muted" id="sheet-coords"></div>
+      <div class="toolbar"><button class="btn primary" id="sheet-save">Save</button><button class="btn" id="sheet-cancel">Cancel</button></div>
+    </div>
+  </div>
+  <nav>
+    <button data-view="map" class="active"><svg viewBox="0 0 24 24"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg>Map</button>
+    <button data-view="wind"><svg viewBox="0 0 24 24"><path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 12h15a3 3 0 1 1-3 3"/><path d="M3 16h8a2 2 0 1 1-2 2"/></svg>Wind</button>
+    <button data-view="marks"><svg viewBox="0 0 24 24"><path d="M12 22s7-7 7-12a7 7 0 0 0-14 0c0 5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>Marks</button>
+    <button data-view="lists"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>Lists</button>
+    <button data-view="info"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>Info</button>
+  </nav>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const LAKE = { lat: 40.975, lon: -96.870, zoom: 14 };
+  const DRAFT_FT = 2.5;
+  const CONTOUR_URL = "https://services5.arcgis.com/IOshH1zLrIieqrNk/arcgis/rest/services/LakeContours/FeatureServer/0/query"
+    + "?where=" + encodeURIComponent("Name='Branched Oak Lake'")
+    + "&outFields=Depth,Elevation&returnGeometry=true&outSR=4326&geometryPrecision=6&f=geojson";
+  const WX_URL = "https://api.open-meteo.com/v1/forecast?latitude=" + LAKE.lat + "&longitude=" + LAKE.lon
+    + "&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code,precipitation"
+    + "&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation_probability,weather_code"
+    + "&daily=sunrise,sunset&wind_speed_unit=kn&temperature_unit=fahrenheit&timezone=America%2FChicago&forecast_days=2";
+
+  const $ = (s) => document.querySelector(s);
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { toast('Could not save (storage full?)'); } }
+  };
+  let toastTimer;
+  function toast(msg, ms) { const el = $('#status'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), ms || 2500); }
+  const fmtTime = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const compass = (deg) => ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(deg / 22.5) % 16];
+
+  /* ---------- Navigation ---------- */
+  document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x === b));
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + b.dataset.view));
+    if (b.dataset.view === 'map') setTimeout(() => { map.invalidateSize(); startWind(); }, 50); else stopWind();
+    if (b.dataset.view === 'marks') renderMarks();
+  }));
+
+  /* ---------- Map ---------- */
+  const map = L.map('map', { zoomControl: false, attributionControl: true, tap: false }).setView([LAKE.lat, LAKE.lon], LAKE.zoom);
+  const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagery: Esri' });
+  const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' });
+  let base = store.get('basemap', 'sat') === 'osm' ? osm : sat;
+  base.addTo(map);
+  $('#btn-layer').addEventListener('click', () => {
+    map.removeLayer(base); base = (base === sat) ? osm : sat; base.addTo(map); store.set('basemap', base === sat ? 'sat' : 'osm');
+    contourLayer && contourLayer.bringToFront();
+  });
+
+  function depthColor(d) {
+    if (d <= 3) return '#ff5a5a';
+    if (d <= 6) return '#ff9f40';
+    const t = Math.min(1, (d - 6) / 24);
+    const r = Math.round(120 - 100 * t), g = Math.round(200 - 120 * t), b = 255;
+    return `rgb(${r},${g},${b})`;
+  }
+  let contourLayer = null, labelLayer = null, fitted = false;
+  window.addEventListener('resize', () => map.invalidateSize());
+  function drawContours(gj) {
+    if (contourLayer) { map.removeLayer(contourLayer); map.removeLayer(labelLayer); }
+    labelLayer = L.layerGroup();
+    contourLayer = L.geoJSON(gj, {
+      style: f => { const d = f.properties.Depth; return { color: depthColor(d), weight: d <= 6 ? 3 : 1.8, opacity: d <= 6 ? 1 : .85 }; },
+      onEachFeature: (f, layer) => {
+        const d = f.properties.Depth, e = f.properties.Elevation;
+        const under = (d - DRAFT_FT).toFixed(1);
+        layer.bindPopup(`<b>${d} ft depth line</b><br>About ${under} ft under the keel at survey pool<br><span class="small muted">Contour elevation ${e ? e.toFixed(1) : '?'} ft</span>`);
+        const coords = f.geometry.type === 'LineString' ? f.geometry.coordinates : f.geometry.coordinates.flat();
+        const n = coords.length;
+        [Math.floor(n * 0.15), Math.floor(n * 0.55), Math.floor(n * 0.85)].forEach(i => {
+          const c = coords[i]; if (!c) return;
+          L.marker([c[1], c[0]], { icon: L.divIcon({ className: 'depth-label', html: d + "'" , iconSize: [20, 12], iconAnchor: [10, 6] }), interactive: false }).addTo(labelLayer);
+        });
+      }
+    }).addTo(map);
+    if (!fitted) { fitted = true; if (!lastPos) map.fitBounds(contourLayer.getBounds(), { padding: [10, 10] }); }
+    map.on('zoomend', () => { if (map.getZoom() >= 15) labelLayer.addTo(map); else map.removeLayer(labelLayer); });
+    if (map.getZoom() >= 15) labelLayer.addTo(map);
+    const depths = [...new Set(gj.features.map(f => f.properties.Depth))].sort((a, b) => a - b);
+    $('#legend').innerHTML = depths.map(d => `<span><i style="background:${depthColor(d)}"></i>${d}'</span>`).join('');
+  }
+  async function loadContours() {
+    const cached = store.get('contours', null);
+    if (cached) { drawContours(cached.gj); setData('contours', `cached ${new Date(cached.at).toLocaleDateString()}`); }
+    try {
+      const r = await fetch(CONTOUR_URL); if (!r.ok) throw new Error(r.status);
+      const gj = await r.json(); if (!gj.features || !gj.features.length) throw new Error('empty');
+      store.set('contours', { at: Date.now(), gj }); drawContours(gj); setData('contours', `live from Game and Parks, ${gj.features.length} contours`);
+    } catch (e) { if (!cached) { toast('Could not load contours (offline?)'); setData('contours', 'unavailable'); } }
+  }
+  const dataStatus = {};
+  function setData(k, v) { dataStatus[k] = v; $('#datastatus').innerHTML = Object.entries(dataStatus).map(([a, b]) => `<div><b>${a}:</b> ${b}</div>`).join(''); }
+
+  /* ---------- Weather ---------- */
+  let wx = null;
+  const arrowSvg = (deg, cls) => `<svg class="${cls || 'arrow-sm'}" viewBox="0 0 24 24" style="transform:rotate(${(deg + 180) % 360}deg)"><path d="M12 3 L18 21 L12 16 L6 21 Z" fill="currentColor"/></svg>`;
+  function renderWx() {
+    if (!wx) return;
+    const c = wx.current;
+    $('#chipval').textContent = `${Math.round(c.wind_speed_10m)} kn ${compass(c.wind_direction_10m)}`;
+    $('#chiparrow').style.transform = `rotate(${(c.wind_direction_10m + 180) % 360}deg)`;
+    const sunset = wx.daily && wx.daily.sunset ? new Date(wx.daily.sunset[0]) : null;
+    $('#wind-now').innerHTML = `
+      <div class="row"><div class="grow"><div class="big">${Math.round(c.wind_speed_10m)} <span class="small muted">kn</span></div>
+      <div>from ${compass(c.wind_direction_10m)} (${Math.round(c.wind_direction_10m)}°), gusts ${Math.round(c.wind_gusts_10m)} kn</div></div>
+      <div>${arrowSvg(c.wind_direction_10m, 'arrow')}</div></div>
+      <div class="muted small" style="margin-top:8px">${Math.round(c.temperature_2m)}°F, ${wmo(c.weather_code)}${sunset ? ' · sunset ' + fmtTime(sunset) : ''} · updated ${fmtTime(new Date(c.time))}</div>`;
+    const h = wx.hourly, now = new Date(); let rows = '<tr><th>Time</th><th>Wind</th><th>Gust</th><th>Dir</th><th>Temp</th><th>Rain</th></tr>';
+    for (let i = 0; i < h.time.length; i++) {
+      const t = new Date(h.time[i]); if (t < now - 3600e3) continue;
+      const isNow = Math.abs(t - now) < 1800e3;
+      const dayLabel = t.getDate() !== now.getDate() && t.getHours() === 0 ? ' <span class="muted">' + t.toLocaleDateString([], { weekday: 'short' }) + '</span>' : '';
+      rows += `<tr class="${isNow ? 'now' : ''}"><td>${fmtTime(t)}${dayLabel}</td><td>${Math.round(h.wind_speed_10m[i])}</td><td class="${h.wind_gusts_10m[i] >= 20 ? 'gust-hi' : ''}">${Math.round(h.wind_gusts_10m[i])}</td><td>${arrowSvg(h.wind_direction_10m[i])} ${compass(h.wind_direction_10m[i])}</td><td>${Math.round(h.temperature_2m[i])}°</td><td>${h.precipitation_probability[i]}%</td></tr>`;
+    }
+    $('#wind-table').innerHTML = rows;
+    setWindState(); startWind();
+  }
+  function wmo(code) {
+    const m = { 0: 'clear', 1: 'mostly clear', 2: 'partly cloudy', 3: 'overcast', 45: 'fog', 48: 'fog', 51: 'light drizzle', 53: 'drizzle', 55: 'heavy drizzle', 61: 'light rain', 63: 'rain', 65: 'heavy rain', 71: 'snow', 73: 'snow', 75: 'heavy snow', 80: 'showers', 81: 'showers', 82: 'heavy showers', 95: 'thunderstorm', 96: 'thunderstorm with hail', 99: 'thunderstorm with hail' };
+    return m[code] || 'code ' + code;
+  }
+  async function loadWx() {
+    const cached = store.get('wx', null);
+    if (cached) { wx = cached.data; renderWx(); }
+    try {
+      const r = await fetch(WX_URL); if (!r.ok) throw new Error(r.status);
+      wx = await r.json(); store.set('wx', { at: Date.now(), data: wx }); renderWx(); setData('weather', 'live, ' + fmtTime(new Date()));
+    } catch (e) { setData('weather', cached ? 'cached from ' + fmtTime(new Date(cached.at)) : 'unavailable'); if (!cached) { $('#chipval').textContent = 'offline'; $('#wind-now').textContent = 'Weather unavailable (offline?).'; } }
+  }
+
+  /* ---------- GPS and tracking ---------- */
+  let watchId = null, posMarker = null, accCircle = null, headingEl = null, wakeLock = null;
+  let recording = false, track = [], trackLine = null, lastPos = null, followMe = true;
+  const posIcon = L.divIcon({ className: '', html: '<div class="pos-dot"></div><div class="pos-heading hidden"></div>', iconSize: [16, 16], iconAnchor: [8, 8] });
+  function startGps() {
+    if (!navigator.geolocation) { toast('No GPS available in this browser'); return; }
+    if (watchId != null) return;
+    watchId = navigator.geolocation.watchPosition(onPos, err => { $('#hud-sub').textContent = err.code === 1 ? 'GPS off (allow location)' : 'GPS unavailable'; }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
+    $('#hud-sub').textContent = 'Waiting for GPS…';
+  }
+  function onPos(p) {
+    const { latitude: lat, longitude: lon, accuracy, speed, heading } = p.coords;
+    const ll = [lat, lon];
+    if (!posMarker) { posMarker = L.marker(ll, { icon: posIcon, zIndexOffset: 1000 }).addTo(map); accCircle = L.circle(ll, { radius: accuracy, color: '#2f8bff', weight: 1, fillOpacity: .08 }).addTo(map); headingEl = posMarker.getElement().querySelector('.pos-heading'); }
+    else { posMarker.setLatLng(ll); accCircle.setLatLng(ll).setRadius(accuracy); }
+    const kn = speed != null && speed >= 0 ? speed * 1.94384 : null;
+    $('#hud-sog').textContent = kn != null ? kn.toFixed(1) : '–';
+    $('#hud-cog').textContent = heading != null && !isNaN(heading) ? Math.round(heading) : '–';
+    if (headingEl) { if (heading != null && !isNaN(heading) && kn > 0.5) { headingEl.classList.remove('hidden'); headingEl.style.transform = `rotate(${heading}deg)`; } else headingEl.classList.add('hidden'); }
+    $('#hud-sub').innerHTML = (recording ? '<span class="rec">● REC</span> ' : '') + `±${Math.round(accuracy)} m · ${fmtTime(new Date(p.timestamp))}`;
+    if (followMe) map.panTo(ll, { animate: true, duration: .5 });
+    lastPos = { lat, lon, t: p.timestamp, acc: accuracy, kn };
+    if (recording && accuracy < 50) {
+      const prev = track[track.length - 1];
+      if (!prev || map.distance([prev.lat, prev.lon], ll) > 3) { track.push({ lat, lon, t: p.timestamp }); trackLine.addLatLng(ll); if (track.length % 10 === 0) saveCurrentTrack(); }
+    }
+  }
+  map.on('dragstart', () => { followMe = false; $('#btn-locate').classList.remove('on'); });
+  $('#btn-locate').addEventListener('click', () => { followMe = true; $('#btn-locate').classList.add('on'); startGps(); if (lastPos) map.setView([lastPos.lat, lastPos.lon], Math.max(map.getZoom(), 15)); });
+
+  async function requestWake() {
+    try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } else toast('Screen wake lock not supported here; keep the screen on manually'); }
+    catch (e) { toast('Could not keep screen awake: ' + e.message); }
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { if (recording && !wakeLock) requestWake(); if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; startGps(); } } });
+
+  function saveCurrentTrack() { store.set('track_current', { started: track[0] ? track[0].t : Date.now(), pts: track }); }
+  $('#btn-track').addEventListener('click', async () => {
+    if (!recording) {
+      recording = true; track = []; trackLine = L.polyline([], { color: '#ffcc4d', weight: 3, opacity: .9 }).addTo(map);
+      $('#btn-track').classList.add('on'); startGps(); await requestWake(); toast('Recording track. Screen will stay on.');
+    } else {
+      recording = false; $('#btn-track').classList.remove('on');
+      if (wakeLock) { wakeLock.release(); wakeLock = null; }
+      if (track.length > 1) { const tracks = store.get('tracks', []); tracks.unshift({ id: Date.now(), started: track[0].t, ended: track[track.length - 1].t, pts: track }); store.set('tracks', tracks.slice(0, 30)); toast('Track saved (' + track.length + ' points)'); }
+      else toast('Track too short to save');
+      localStorage.removeItem('track_current'); track = []; $('#hud-sub').textContent = lastPos ? `±${Math.round(lastPos.acc)} m` : 'GPS on';
+    }
+  });
+  (function recoverTrack() { const cur = store.get('track_current', null); if (cur && cur.pts && cur.pts.length > 1) { const tracks = store.get('tracks', []); tracks.unshift({ id: cur.started, started: cur.started, ended: cur.pts[cur.pts.length - 1].t, pts: cur.pts, recovered: true }); store.set('tracks', tracks.slice(0, 30)); localStorage.removeItem('track_current'); } })();
+
+  function trackStats(t) {
+    let dist = 0; for (let i = 1; i < t.pts.length; i++) dist += map.distance([t.pts[i - 1].lat, t.pts[i - 1].lon], [t.pts[i].lat, t.pts[i].lon]);
+    const nm = dist / 1852, hrs = (t.ended - t.started) / 3600e3;
+    return { nm, hrs, avg: hrs > 0 ? nm / hrs : 0 };
+  }
+  function gpx(t) {
+    const pts = t.pts.map(p => `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${new Date(p.t).toISOString()}</time></trkpt>`).join('\n');
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Branched Oak Sailing" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Buen Camino ${new Date(t.started).toLocaleDateString()}</name><trkseg>\n${pts}\n</trkseg></trk></gpx>`;
+  }
+  async function shareFile(name, text, type) {
+    const file = new File([text], name, { type });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  let shownTrack = null;
+  function renderTracks() {
+    const tracks = store.get('tracks', []); const el = $('#tracks-list');
+    if (!tracks.length) { el.innerHTML = '<span class="muted">No tracks yet. Tap the record button on the map to start one.</span>'; return; }
+    el.innerHTML = tracks.map(t => { const s = trackStats(t); return `<div class="markitem"><div class="name">${new Date(t.started).toLocaleDateString()} ${fmtTime(new Date(t.started))} to ${fmtTime(new Date(t.ended))}${t.recovered ? ' <span class="warn small">(recovered)</span>' : ''}</div><div class="note">${s.nm.toFixed(2)} nm · ${(s.hrs * 60).toFixed(0)} min · avg ${s.avg.toFixed(1)} kn · ${t.pts.length} points</div>
+      <div class="toolbar"><button class="btn sm" data-show="${t.id}">Show on map</button><button class="btn sm" data-gpx="${t.id}">Share GPX</button><button class="btn sm danger" data-del="${t.id}">Delete</button></div></div>`; }).join('');
+    el.querySelectorAll('[data-show]').forEach(b => b.addEventListener('click', () => { const t = tracks.find(x => x.id == b.dataset.show); if (shownTrack) map.removeLayer(shownTrack); shownTrack = L.polyline(t.pts.map(p => [p.lat, p.lon]), { color: '#5fd38d', weight: 3 }).addTo(map); map.fitBounds(shownTrack.getBounds(), { padding: [30, 30] }); followMe = false; document.querySelector('nav button[data-view=map]').click(); }));
+    el.querySelectorAll('[data-gpx]').forEach(b => b.addEventListener('click', () => { const t = tracks.find(x => x.id == b.dataset.gpx); shareFile('buen-camino-' + new Date(t.started).toISOString().slice(0, 10) + '.gpx', gpx(t), 'application/gpx+xml'); }));
+    el.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { if (confirm('Delete this track?')) { store.set('tracks', tracks.filter(x => x.id != b.dataset.del)); renderTracks(); } }));
+  }
+
+  /* ---------- Marks ---------- */
+  let marks = store.get('marks', []); const markLayer = L.layerGroup().addTo(map); const markObjs = {};
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function saveMarks() { store.set('marks', marks); drawMarks(); }
+  function drawMarks() {
+    markLayer.clearLayers();
+    marks.forEach(m => {
+      const mk = L.marker([m.lat, m.lon], { icon: L.divIcon({ className: '', html: '<div class="mark-pin"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }) }).addTo(markLayer);
+      markObjs[m.id] = mk;
+      mk.bindPopup(() => {
+        const d = document.createElement('div');
+        const story = m.story ? `<div class="small" style="margin-top:4px;max-height:5em;overflow:hidden">${esc(m.story).slice(0, 220)}${m.story.length > 220 ? '…' : ''}</div>` : '';
+        d.innerHTML = `<b>${esc(m.name)}</b>${m.note ? `<br><span class="small muted">${esc(m.note)}</span>` : ''}${story}<br><button class="btn sm">Edit</button><button class="btn sm">Nudge</button><button class="btn sm danger">Delete</button>`;
+        const [bEdit, bNudge, bDel] = d.querySelectorAll('button');
+        bEdit.addEventListener('click', () => { mk.closePopup(); openSheet(m); });
+        bNudge.addEventListener('click', () => { mk.closePopup(); startNudge(m); });
+        bDel.addEventListener('click', () => { if (confirm('Delete "' + m.name + '"?')) { marks = marks.filter(x => x.id !== m.id); saveMarks(); renderMarks(); } });
+        return d; });
+      mk.on('dragend', () => { if (nudging && nudging.id === m.id) { const ll = mk.getLatLng(); nudging.lat = +ll.lat.toFixed(6); nudging.lon = +ll.lng.toFixed(6); } });
+    });
+  }
+
+  // Edit sheet (name, note, story)
+  let sheetTarget = null;
+  function openSheet(m, isNew) {
+    sheetTarget = { m, isNew: !!isNew };
+    $('#sheet-title').textContent = isNew ? 'New mark' : 'Edit mark';
+    $('#sheet-name').value = m.name || ''; $('#sheet-note').value = m.note || ''; $('#sheet-story').value = m.story || '';
+    $('#sheet-coords').textContent = m.lat.toFixed(5) + ', ' + m.lon.toFixed(5);
+    $('#sheet').classList.remove('hidden'); setTimeout(() => $('#sheet-name').focus(), 50);
+  }
+  function closeSheet() { $('#sheet').classList.add('hidden'); sheetTarget = null; }
+  $('#sheet-cancel').addEventListener('click', closeSheet);
+  $('#sheet').addEventListener('click', e => { if (e.target === $('#sheet')) closeSheet(); });
+  $('#sheet-save').addEventListener('click', () => {
+    if (!sheetTarget) return; const { m, isNew } = sheetTarget;
+    const name = $('#sheet-name').value.trim(); if (!name) { $('#sheet-name').focus(); return; }
+    m.name = name; m.note = $('#sheet-note').value.trim(); m.story = $('#sheet-story').value.trim();
+    if (isNew) marks.unshift(m);
+    saveMarks(); renderMarks(); closeSheet(); toast(isNew ? 'Mark saved' : 'Mark updated');
+  });
+  function addMark(lat, lon) { openSheet({ id: Date.now(), name: '', note: '', story: '', lat: +lat.toFixed(6), lon: +lon.toFixed(6), at: Date.now() }, true); }
+  $('#btn-mark').addEventListener('click', () => { const c = lastPos && (Date.now() - lastPos.t < 30000) ? lastPos : null; const ll = c ? { lat: c.lat, lng: c.lon } : map.getCenter(); if (!c) toast('No fresh GPS fix, marking map center'); addMark(ll.lat, ll.lng); });
+  // press and hold to add a mark
+  let pressTimer = null;
+  map.on('mousedown touchstart', e => { if (nudging) return; const ll = e.latlng; pressTimer = setTimeout(() => { addMark(ll.lat, ll.lng); }, 700); });
+  ['mouseup', 'touchend', 'dragstart', 'move', 'zoomstart'].forEach(ev => map.on(ev, () => clearTimeout(pressTimer)));
+
+  // Nudge: arrow buttons move 2 m; the pin is also draggable while nudging
+  let nudging = null, nudgeOrig = null;
+  function startNudge(m) {
+    nudging = m; nudgeOrig = { lat: m.lat, lon: m.lon }; followMe = false;
+    $('#nudge-name').textContent = m.name; $('#nudge').classList.remove('hidden'); $('#hud').classList.add('hidden');
+    map.setView([m.lat, m.lon], Math.max(map.getZoom(), 17));
+    const mk = markObjs[m.id]; if (mk && mk.dragging) mk.dragging.enable();
+  }
+  function endNudge(keep) {
+    if (!nudging) return;
+    const mk = markObjs[nudging.id]; if (mk && mk.dragging) mk.dragging.disable();
+    if (!keep) { nudging.lat = nudgeOrig.lat; nudging.lon = nudgeOrig.lon; }
+    nudging = null; $('#nudge').classList.add('hidden'); $('#hud').classList.remove('hidden');
+    saveMarks(); renderMarks(); if (keep) toast('Position updated');
+  }
+  $('#nudge').querySelectorAll('button[data-n]').forEach(b => b.addEventListener('click', () => {
+    if (!nudging) return; const [dx, dy] = b.dataset.n.split(',').map(Number); const step = 2; // metres
+    const dLat = (dy * step) / 111320, dLon = (dx * step) / (111320 * Math.cos(nudging.lat * Math.PI / 180));
+    nudging.lat = +(nudging.lat + dLat).toFixed(7); nudging.lon = +(nudging.lon + dLon).toFixed(7);
+    const mk = markObjs[nudging.id]; if (mk) mk.setLatLng([nudging.lat, nudging.lon]);
+  }));
+  $('#nudge-done').addEventListener('click', () => endNudge(true));
+  $('#nudge-cancel').addEventListener('click', () => endNudge(false));
+
+  function renderMarks() {
+    renderTracks(); const el = $('#marks-list');
+    if (!marks.length) { el.innerHTML = '<span class="muted">No marks yet. On the map, tap the pin button or press and hold on the water.</span>'; return; }
+    el.innerHTML = marks.map(m => `<div class="markitem"><div class="name">${esc(m.name)}</div>${m.note ? `<div class="note">${esc(m.note)}</div>` : ''}${m.story ? `<div class="story clamp" data-story="${m.id}">${esc(m.story)}</div><button class="linkbtn" data-more="${m.id}">Read more</button>` : ''}<div class="small muted">${m.lat.toFixed(5)}, ${m.lon.toFixed(5)} · ${new Date(m.at).toLocaleDateString()}</div>
+      <div class="toolbar"><button class="btn sm" data-go="${m.id}">Show</button><button class="btn sm" data-edit="${m.id}">Edit</button><button class="btn sm" data-nudge="${m.id}">Nudge</button><button class="btn sm danger" data-del="${m.id}">Delete</button></div></div>`).join('');
+    const goMap = () => document.querySelector('nav button[data-view=map]').click();
+    el.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => { const m = marks.find(x => x.id == b.dataset.go); followMe = false; map.setView([m.lat, m.lon], 16); goMap(); }));
+    el.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => openSheet(marks.find(x => x.id == b.dataset.edit))));
+    el.querySelectorAll('[data-nudge]').forEach(b => b.addEventListener('click', () => { goMap(); setTimeout(() => startNudge(marks.find(x => x.id == b.dataset.nudge)), 100); }));
+    el.querySelectorAll('[data-more]').forEach(b => b.addEventListener('click', () => { const s = el.querySelector(`[data-story="${b.dataset.more}"]`); s.classList.toggle('clamp'); b.textContent = s.classList.contains('clamp') ? 'Read more' : 'Show less'; }));
+    el.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { const m = marks.find(x => x.id == b.dataset.del); if (confirm('Delete "' + m.name + '"?')) { marks = marks.filter(x => x.id !== m.id); saveMarks(); renderMarks(); } }));
+  }
+  $('#btn-share-marks').addEventListener('click', () => shareFile('branched-oak-marks.json', JSON.stringify({ type: 'branched-oak-marks', marks }, null, 1), 'application/json'));
+  $('#file-marks').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try { const j = JSON.parse(await f.text()); const inc = j.marks || j; if (!Array.isArray(inc)) throw 0; let n = 0;
+      inc.forEach(m => { if (typeof m.lat === 'number' && typeof m.lon === 'number' && m.name && !marks.some(x => x.id === m.id)) { marks.push({ id: m.id || Date.now() + n, name: String(m.name), note: String(m.note || ''), story: String(m.story || ''), lat: m.lat, lon: m.lon, at: m.at || Date.now() }); n++; } });
+      saveMarks(); renderMarks(); toast(n + ' marks imported'); } catch (err) { toast('That file did not look like a marks file'); }
+    e.target.value = '';
+  });
+  drawMarks();
+
+  /* ---------- Wind animation on the map ---------- */
+  const WIND_BINS = [[0, 5, '#9fd8ff'], [5, 10, '#5fd38d'], [10, 15, '#ffcc4d'], [15, 20, '#ff9f40'], [20, 99, '#ff5a5a']];
+  const windColor = kn => (WIND_BINS.find(b => kn < b[1]) || WIND_BINS[WIND_BINS.length - 1])[2];
+  const wc = $('#windcanvas'), wctx = wc.getContext('2d');
+  let windOn = store.get('windAnim', true), particles = [], windRaf = null, windState = null;
+  $('#btn-wind').classList.toggle('on', windOn);
+  $('#btn-wind').addEventListener('click', () => { windOn = !windOn; store.set('windAnim', windOn); $('#btn-wind').classList.toggle('on', windOn); $('#windlegend').classList.toggle('hidden', !windOn); windOn ? startWind() : stopWind(); });
+  function sizeWind() { const r = wc.getBoundingClientRect(); const dpr = Math.min(2, window.devicePixelRatio || 1); wc.width = Math.round(r.width * dpr); wc.height = Math.round(r.height * dpr); wctx.setTransform(dpr, 0, 0, dpr, 0, 0); wc._w = r.width; wc._h = r.height; }
+  function setWindState() {
+    if (!wx || !wx.current) return;
+    const c = wx.current; const kn = c.wind_speed_10m, toDeg = (c.wind_direction_10m + 180) % 360; const rad = toDeg * Math.PI / 180;
+    windState = { kn, dx: Math.sin(rad), dy: -Math.cos(rad), color: windColor(kn), dir: compass(c.wind_direction_10m) };
+    $('#windlegend').innerHTML = `<span class="lbl">wind ${Math.round(kn)} kn from ${windState.dir}</span>` + WIND_BINS.map(b => `<span><i style="background:${b[2]}"></i>${b[1] > 50 ? b[0] + '+' : b[0] + '-' + b[1]}</span>`).join('');
+    $('#windlegend').classList.toggle('hidden', !windOn);
+  }
+  function seed(n) { particles = []; for (let i = 0; i < n; i++) particles.push({ x: Math.random() * wc._w, y: Math.random() * wc._h, life: Math.random() * 300 }); }
+  function drawArrow(x, y, dx, dy, col) { const s = 6; wctx.save(); wctx.translate(x, y); wctx.rotate(Math.atan2(dy, dx) + Math.PI / 2); wctx.beginPath(); wctx.moveTo(0, -s); wctx.lineTo(s * .6, s); wctx.lineTo(0, s * .45); wctx.lineTo(-s * .6, s); wctx.closePath(); wctx.fillStyle = col; wctx.fill(); wctx.restore(); }
+  function windFrame() {
+    if (!windOn || !windState) { windRaf = null; return; }
+    if (!wc._w) sizeWind();
+    wctx.clearRect(0, 0, wc._w, wc._h);
+    const speed = 0.25 + Math.min(20, windState.kn) * 0.12; // px per frame
+    wctx.globalAlpha = 0.85;
+    for (const p of particles) {
+      p.x += windState.dx * speed; p.y += windState.dy * speed; p.life++;
+      if (p.x < -10 || p.x > wc._w + 10 || p.y < -10 || p.y > wc._h + 10 || p.life > 420) { p.life = 0; if (Math.abs(windState.dx) > Math.abs(windState.dy)) { p.x = windState.dx > 0 ? -5 : wc._w + 5; p.y = Math.random() * wc._h; } else { p.y = windState.dy > 0 ? -5 : wc._h + 5; p.x = Math.random() * wc._w; } }
+      const fade = Math.min(1, p.life / 40, (420 - p.life) / 40);
+      wctx.globalAlpha = 0.8 * fade;
+      drawArrow(p.x, p.y, windState.dx, windState.dy, windState.color);
+    }
+    windRaf = requestAnimationFrame(windFrame);
+  }
+  function startWind() { if (!windOn || windRaf) return; sizeWind(); if (!particles.length) seed(Math.round(wc._w * wc._h / 14000)); windFrame(); }
+  function stopWind() { if (windRaf) cancelAnimationFrame(windRaf); windRaf = null; wctx.clearRect(0, 0, wc._w || 0, wc._h || 0); }
+  window.addEventListener('resize', () => { sizeWind(); particles = []; if (windOn) seed(Math.round(wc._w * wc._h / 14000)); });
+  document.addEventListener('visibilitychange', () => { document.visibilityState === 'visible' ? startWind() : stopWind(); });
+
+  /* ---------- Zoom buttons ---------- */
+  $('#btn-zin').addEventListener('click', () => map.zoomIn());
+  $('#btn-zout').addEventListener('click', () => map.zoomOut());
+
+  /* ---------- Checklists ---------- */
+  const DEFAULT_LISTS = [
+    { name: 'Leaving for the Lake', items: [
+      'Check the forecast: wind, gusts, storms, sunset time',
+      'PFDs for everyone aboard, plus a throwable',
+      'Phones charged, mounts and charging cable',
+      'Handheld VHF or a way to call for help',
+      'Sunscreen, hats, sunglasses, layers, rain shells',
+      'Water, food, cooler',
+      'Boat keys, slip and gate keys, marina card',
+      'Fuel: portable tank topped off, spare if needed',
+      'Tools and spares bag (tape, line, shackles, cotter pins, pliers)',
+      'First aid kit',
+      'Dock lines and fenders if they are not kept on the boat',
+      'Tell someone the plan and when you expect to be back' ] },
+    { name: 'Leaving the Slip', items: [
+      'Look over rigging: turnbuckles, clevis and cotter pins, spreader tips (C22 manual)',
+      'Halyards free and not tangled, no broken strands (C22 manual)',
+      'Pintles, gudgeons, fasteners; tiller moves freely (C22 manual)',
+      'Bilge and compartments dry (C22 manual)',
+      'Running lights work if you may be out at dusk (C22 manual)',
+      'Motor: fuel connected and vented, primed, kill cord attached, starts and idles',
+      'Battery switch on, electronics on',
+      'Sails bent on, sheets led, sail ties off the main',
+      'Mainsheet and traveler ready, jib sheets free to run',
+      'Cockpit hatch covers latched, pop-top down (C22 manual)',
+      'Loose gear stowed below, companionway boards at hand',
+      'PFDs on or at hand, everyone knows where the throwable is',
+      'Fenders and dock lines ready to bring aboard, plan the exit with the wind',
+      'Open this page, start the track' ] },
+    { name: 'Leaving the Lake', items: [
+      'Boat secured in the slip: bow, stern, and spring lines, fenders set',
+      'Sails flaked or furled and covered, halyards tied off away from the mast',
+      'Sheets coiled, tiller lashed or centered',
+      'Motor off, tilted up, fuel line disconnected, tank closed and stowed',
+      'Battery switch off, electronics off',
+      'Bilge checked and pumped dry',
+      'Cushions and anything that can mildew stowed or taken home',
+      'Food, trash, wet towels off the boat',
+      'Ports and hatches closed, pop-top latched down',
+      'Companionway boards in, hatch locked',
+      'Cockpit lockers latched, cover on if you use one',
+      'Stop the track, save any marks or notes',
+      'Walk the dock: lines chafing, fenders where they belong, nothing left behind' ] },
+    { name: 'Winter Storage', items: [
+      'Book the haul-out or ramp date with the marina before the season ends',
+      'Take sails home to dry, inspect, and store loose',
+      'Remove cushions, lines, electronics, PFDs, and anything that can freeze or mildew',
+      'Motor: run the carburetor dry or stabilize fuel, change gear oil, flush, store per the Honda manual',
+      'Battery out, fully charged, stored inside for the winter (C22 manual)',
+      'Drain all water: bilge, cockpit drains, sink, any tanks and lines',
+      'Drain plug out and kept where you will find it in spring',
+      'Hull washed, waterline scrubbed, keel and rudder inspected while she is out',
+      'Mast up: halyards tied off so they cannot slap, spreader boots and rigging checked',
+      'Tarps rigged over the cockpit and cabin with a ridge line so water sheds and does not pool',
+      'Tarps tied to the trailer or cradle, not to lifelines or stanchions',
+      'Block the trailer to take weight off the tires (C22 manual)',
+      'Ventilation: a vent or gap so the cabin can breathe under the tarp',
+      'Note anything that needs repair over the winter' ] },
+    { name: 'Spring Launch', items: [
+      'Order parts for winter repairs early',
+      'Spring safety checkout: hull, keel bolts, hardware, rigging, motor, trailer (C22 manual)',
+      'Tighten keel bolts, check for cracks (C22 manual)',
+      'Check every clevis pin, cotter pin, turnbuckle, and swage; grease turnbuckle threads (C22 manual)',
+      'Battery back in, clean terminals, test every circuit and light (C22 manual)',
+      'Motor serviced: fresh fuel, plugs, oil, test run before launch',
+      'Drain plug in and checked',
+      'Hull cleaned and waxed, registration numbers legible',
+      'Sails and running rigging back aboard, halyards run',
+      'Cushions, PFDs, safety gear, dock lines, fenders back aboard',
+      'Tarps off, folded, and stored',
+      'Launch, then check the bilge for leaks before leaving the ramp',
+      'Motor to the slip, set lines and fenders, then a short shakedown sail' ] },
+    { name: 'Trailer Sailors', items: [
+      'Before the trip: trailer bearings, tires and spare, lights, brakes, coupler, safety chains, winch strap',
+      'Truck: tongue weight and payload within limits for two people and gear',
+      'Pull the boat at the marina ramp, center her on the trailer, bow eye winched tight and safety chained',
+      'Mast down and supported at bow, middle, and stern (C22 manual); rigging bundled, nothing chafing',
+      'Boom, sails, cushions, and loose gear stowed or in the truck',
+      'Drain plug out for the drive, motor tilted and secured, fuel tank closed',
+      'Straps on, hatches locked, walk-around, then a second walk-around after the first stop',
+      'On the road: check straps and hub temperature at every stop',
+      'At the new lake: registration, ramp fees, launch permits, and invasive species rules',
+      'Raise the mast, pin and tension the rigging, drain plug in',
+      'Launch, check the bilge, then sail',
+      'Coming home: same steps in reverse, then launch back at Branched Oak and return to the slip',
+      'After the trip: rinse trailer, check bearings, restock spares' ] }
+  ];
+  const LISTS_KEY = 'lists_v2';
+  let lists = store.get(LISTS_KEY, null) || JSON.parse(JSON.stringify(DEFAULT_LISTS)).map(l => ({ name: l.name, items: l.items.map(t => ({ t, done: false })) }));
+  function saveLists() { store.set(LISTS_KEY, lists); }
+  function renderLists() {
+    $('#lists').innerHTML = lists.map((l, li) => `<div class="card"><h2 style="font-size:15px;margin:0 0 6px">${esc(l.name)}</h2>${l.items.map((it, ii) => `<label class="chk ${it.done ? 'done' : ''}"><input type="checkbox" data-l="${li}" data-i="${ii}" ${it.done ? 'checked' : ''}><span>${esc(it.t)}</span><button class="x" data-xl="${li}" data-xi="${ii}" title="Remove">×</button></label>`).join('')}
+      <div class="addrow"><input type="text" placeholder="Add item" data-add="${li}"><button class="btn sm" data-addbtn="${li}">Add</button></div></div>`).join('');
+    $('#lists').querySelectorAll('input[type=checkbox]').forEach(c => c.addEventListener('change', () => { lists[c.dataset.l].items[c.dataset.i].done = c.checked; saveLists(); renderLists(); }));
+    $('#lists').querySelectorAll('.x').forEach(b => b.addEventListener('click', e => { e.preventDefault(); lists[b.dataset.xl].items.splice(b.dataset.xi, 1); saveLists(); renderLists(); }));
+    $('#lists').querySelectorAll('[data-addbtn]').forEach(b => b.addEventListener('click', () => { const inp = $('#lists').querySelector(`input[data-add="${b.dataset.addbtn}"]`); const v = inp.value.trim(); if (!v) return; lists[b.dataset.addbtn].items.push({ t: v, done: false }); saveLists(); renderLists(); }));
+    $('#lists').querySelectorAll('input[data-add]').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') $('#lists').querySelector(`[data-addbtn="${i.dataset.add}"]`).click(); }));
+  }
+  $('#btn-reset-lists').addEventListener('click', () => { lists.forEach(l => l.items.forEach(i => i.done = false)); saveLists(); renderLists(); });
+  $('#btn-restore-lists').addEventListener('click', () => { if (confirm('Replace your lists with the defaults?')) { lists = JSON.parse(JSON.stringify(DEFAULT_LISTS)).map(l => ({ name: l.name, items: l.items.map(t => ({ t, done: false })) })); saveLists(); renderLists(); } });
+  renderLists();
+
+  /* ---------- Go ---------- */
+  loadContours(); loadWx(); setInterval(loadWx, 15 * 60e3);
+  startGps();
+  window.addEventListener('online', () => { loadContours(); loadWx(); });
+})();
+</script>
+</body>
+</html>
