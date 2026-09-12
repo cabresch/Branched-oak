@@ -93,7 +93,13 @@
   .leg .turn { color: var(--accent); font-size: 12px; }
   .leg .beat { color: var(--danger); }
   .windpick { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 6px 0 10px; flex-wrap: wrap; }
-  .windpick input[type=range] { flex: 1; min-width: 120px; }
+  .windpick .grow { flex: 1; min-width: 140px; }
+  .windpad { position: relative; width: 140px; height: 140px; border-radius: 50%; background: radial-gradient(circle, #0d2c42 0%, #164461 70%, #10344d 100%); border: 1px solid var(--line); touch-action: none; user-select: none; flex: none; }
+  .windpad .wp-ring { position: absolute; left: 50%; top: 50%; width: 50%; height: 50%; transform: translate(-50%, -50%); border-radius: 50%; border: 1px dashed rgba(157,180,198,.35); pointer-events: none; }
+  .windpad .wp-n, .windpad .wp-e, .windpad .wp-s, .windpad .wp-w { position: absolute; font-size: 10px; color: var(--muted); pointer-events: none; }
+  .windpad .wp-n { top: 3px; left: 50%; transform: translateX(-50%); } .windpad .wp-s { bottom: 3px; left: 50%; transform: translateX(-50%); }
+  .windpad .wp-e { right: 5px; top: 50%; transform: translateY(-50%); } .windpad .wp-w { left: 5px; top: 50%; transform: translateY(-50%); }
+  .windpad .wp-dot { position: absolute; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 2px solid #1a1a1a; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 0 3px rgba(255,204,77,.3); }
   .drill { margin-bottom: 12px; }
   .drill ol { padding-left: 20px; margin: 6px 0; }
   .drill li { margin: 4px 0; }
@@ -163,6 +169,7 @@
         <button id="btn-layer" title="Switch basemap"><svg viewBox="0 0 24 24"><path d="M12 3 2 8l10 5 10-5-10-5z"/><path d="M2 13l10 5 10-5"/><path d="M2 18l10 5 10-5"/></svg></button>
         <button id="btn-wind" class="on" title="Show or hide wind animation"><svg viewBox="0 0 24 24"><path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 12h15a3 3 0 1 1-3 3"/><path d="M3 16h8a2 2 0 1 1-2 2"/></svg></button>
       </div>
+      <button id="btn-hideroute" class="hidden" style="position:absolute;left:10px;bottom:120px;z-index:500;background:rgba(16,52,77,.92);color:var(--text);border:1px solid #5fd38d;border-radius:10px;padding:8px 12px;font-size:13px">Hide route</button>
       <div class="zoombtns">
         <button id="btn-zin" title="Zoom in">+</button>
         <button id="btn-zout" title="Zoom out">&minus;</button>
@@ -624,19 +631,19 @@
       const a = r.wps[i], b = r.wps[i + 1]; const brg = bearing(a, b); const nm = distNm(a, b);
       let rel = ((windFrom - brg) % 360 + 360) % 360; // where the wind sits relative to the bow: 0 = dead ahead, 90 = over the starboard side
       const angle = rel > 180 ? 360 - rel : rel; const tack = rel > 0 && rel < 180 ? 'starboard' : 'port';
-      const ps = pointOfSail(angle); legs.push({ i, from: a, to: b, brg, nm, angle, tack, ...ps, note: a.legNote || '' });
+      const ps = pointOfSail(angle); legs.push({ i, from: a, to: b, brg, nm, angle, tack, ...ps, note: a.legNote || '', text: a.legText || '' });
     }
-    legs.forEach((l, i) => { if (i === 0) return; const p = legs[i - 1]; if (l.beat) l.turn = ''; else if (p.tack !== l.tack) l.turn = (p.angle + l.angle) / 2 > 90 ? 'Jibe' : 'Tack'; else l.turn = Math.abs(l.angle - p.angle) < 8 ? '' : (l.angle < p.angle ? 'Head up' : 'Bear away'); });
+    legs.forEach((l, i) => { if (i === 0) return; const p = legs[i - 1]; if (l.beat || l.text || p.text) l.turn = ''; else if (p.tack !== l.tack) l.turn = (p.angle + l.angle) / 2 > 90 ? 'Jibe' : 'Tack'; else l.turn = Math.abs(l.angle - p.angle) < 8 ? '' : (l.angle < p.angle ? 'Head up' : 'Bear away'); });
     return legs;
   }
   function narrative(r, windFrom, windKn) {
     const legs = readRoute(r, windFrom); const total = legs.reduce((a, l) => a + l.nm, 0);
-    const line = l => `Leg ${l.i + 1}, ${esc(l.from.name || 'waypoint ' + (l.i + 1))} to ${esc(l.to.name || 'waypoint ' + (l.i + 2))}, ${l.nm.toFixed(2)} nm heading ${Math.round(l.brg).toString().padStart(3, '0')}: ` + (l.beat ? `<span class="beat">into the wind, beat up in a series of tacks</span>` : `<span class="pos">${l.tack} tack ${l.pos}</span>`) + (l.run ? ' <span class="small muted">(dead run, watch the boom; a pair of broad reaches is safer)</span>' : '');
+    const line = l => `Leg ${l.i + 1}, ${l.nm.toFixed(2)} nm heading ${Math.round(l.brg).toString().padStart(3, '0')}: ` + (l.text ? `<span class="pos">${esc(l.text)}</span>` : (l.beat ? `<span class="beat">into the wind, beat up in a series of tacks</span>` : `<span class="pos">${l.tack} tack ${l.pos}</span>`) + (l.run ? ' <span class="small muted">(dead run, watch the boom; a pair of broad reaches is safer)</span>' : ''));
     return { legs, total, html: `<div class="small muted">${legs.length} legs, ${total.toFixed(2)} nm, read against wind from ${compass(windFrom)} (${Math.round(windFrom)}°)${windKn != null ? ' at ' + Math.round(windKn) + ' kn' : ''}</div>` + legs.map(l => `<div class="leg">${l.turn ? `<div class="turn">${l.turn === 'Tack' || l.turn === 'Jibe' ? l.turn + ' to ' + l.tack : l.turn}</div>` : ''}<div>${line(l)}</div>${l.note ? `<div class="small muted">Note: ${esc(l.note)}</div>` : ''}</div>`).join('') + (r.story ? `<div class="story" style="margin-top:8px">${esc(r.story)}</div>` : '') };
   }
   let routeLayer = L.layerGroup().addTo(map), shownRoute = null;
   function showRoute(r) {
-    routeLayer.clearLayers(); shownRoute = r; if (!r) return;
+    routeLayer.clearLayers(); shownRoute = r; $('#btn-hideroute').classList.toggle('hidden', !r); if (!r) return;
     const ll = r.wps.map(w => [w.lat, w.lon]);
     const line = L.polyline(ll, { color: '#5fd38d', weight: 4, opacity: .9 }).addTo(routeLayer);
     line.on('click', () => openRouteSheet(r));
@@ -644,6 +651,7 @@
     for (let i = 0; i < r.wps.length - 1; i++) { const a = r.wps[i], b = r.wps[i + 1]; const mid = [(a.lat + b.lat) / 2, (a.lon + b.lon) / 2]; L.marker(mid, { icon: L.divIcon({ className: '', html: `<div class="leg-arrow" style="transform:rotate(${bearing(a, b)}deg)"></div>`, iconSize: [12, 14], iconAnchor: [6, 7] }), interactive: false }).addTo(routeLayer); }
     map.fitBounds(line.getBounds(), { padding: [40, 40] }); followMe = false;
   }
+  $('#btn-hideroute').addEventListener('click', () => { showRoute(null); toast('Route hidden'); });
   function liveWind() { return wx && wx.current ? { from: wx.current.wind_direction_10m, kn: wx.current.wind_speed_10m } : { from: 180, kn: null }; }
   function openRouteSheet(r) {
     const w = liveWind(); let from = w.from, kn = w.kn;
@@ -651,13 +659,21 @@
     const render = () => {
       const n = narrative(r, from, kn);
       box.innerHTML = `<h2>${esc(r.name || 'Route')}</h2>
-        <div class="windpick"><span>Wind from</span><input type="range" id="wp-dir" min="0" max="359" value="${Math.round(from)}"><b id="wp-lbl">${compass(from)} ${Math.round(from)}°</b><button class="btn sm" id="wp-live">Live</button></div>
+        <div class="windpick"><div class="windpad" id="wp-pad"><div class="wp-n">N</div><div class="wp-e">E</div><div class="wp-s">S</div><div class="wp-w">W</div><div class="wp-ring"></div><div class="wp-dot" id="wp-dot"></div></div>
+          <div class="grow"><div><b id="wp-lbl">${compass(from)} ${Math.round(from)}°${kn != null ? ' at ' + Math.round(kn) + ' kn' : ''}</b></div><div class="small muted">Drag the dot toward where the wind comes from. Center is calm; further out is stronger.</div><button class="btn sm" id="wp-live" style="margin-top:6px">Live wind</button></div></div>
         <div id="wp-narr">${n.html}</div>
-        <div class="toolbar" style="margin-top:12px"><button class="btn sm" id="rs-show">Show on map</button><button class="btn sm" id="rs-edit">Edit name and story</button><button class="btn sm" id="rs-notes">Leg notes</button><button class="btn sm danger" id="rs-del">Delete</button><button class="btn sm" id="rs-close">Close</button></div>`;
-      const slider = box.querySelector('#wp-dir');
-      slider.addEventListener('input', () => { from = +slider.value; kn = null; box.querySelector('#wp-lbl').textContent = compass(from) + ' ' + from + '°'; box.querySelector('#wp-narr').innerHTML = narrative(r, from, kn).html; });
+        <div class="toolbar" style="margin-top:12px"><button class="btn sm" id="rs-show">${shownRoute && shownRoute.id === r.id ? 'Hide from map' : 'Show on map'}</button><button class="btn sm" id="rs-edit">Edit name and story</button><button class="btn sm" id="rs-notes">Edit legs</button><button class="btn sm danger" id="rs-del">Delete</button><button class="btn sm" id="rs-close">Close</button></div>`;
+      const pad = box.querySelector('#wp-pad'), dot = box.querySelector('#wp-dot'); const MAXKN = 30;
+      const place = () => { const R = pad.clientWidth / 2 - 8; const d = Math.min(1, (kn == null ? 0.6 : kn / MAXKN)) * R; const a = toRad(from); dot.style.left = (R + 8 + Math.sin(a) * d) + 'px'; dot.style.top = (R + 8 - Math.cos(a) * d) + 'px'; };
+      const update = () => { box.querySelector('#wp-lbl').textContent = compass(from) + ' ' + Math.round(from) + '°' + (kn != null ? ' at ' + Math.round(kn) + ' kn' : ''); box.querySelector('#wp-narr').innerHTML = narrative(r, from, kn).html; place(); };
+      const onPt = e => { const rect = pad.getBoundingClientRect(); const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2; const dx = e.clientX - cx, dy = e.clientY - cy; const R = rect.width / 2 - 8; const d = Math.min(1, Math.hypot(dx, dy) / R); if (d < 0.05) return; from = Math.round((toDeg(Math.atan2(dx, -dy)) + 360) % 360); kn = Math.round(d * MAXKN); update(); };
+      let dragging = false;
+      pad.addEventListener('pointerdown', e => { dragging = true; pad.setPointerCapture(e.pointerId); onPt(e); e.preventDefault(); });
+      pad.addEventListener('pointermove', e => { if (dragging) onPt(e); });
+      pad.addEventListener('pointerup', () => { dragging = false; }); pad.addEventListener('pointercancel', () => { dragging = false; });
+      setTimeout(place, 0);
       box.querySelector('#wp-live').addEventListener('click', () => { const lw = liveWind(); from = lw.from; kn = lw.kn; render(); });
-      box.querySelector('#rs-show').addEventListener('click', () => { closeRouteSheet(); showRoute(r); document.querySelector('nav button[data-view=map]').click(); });
+      box.querySelector('#rs-show').addEventListener('click', () => { closeRouteSheet(); if (shownRoute && shownRoute.id === r.id) { showRoute(null); toast('Route hidden'); } else { showRoute(r); document.querySelector('nav button[data-view=map]').click(); } });
       box.querySelector('#rs-edit').addEventListener('click', () => { closeRouteSheet(); openSheet(r, false, 'route'); });
       box.querySelector('#rs-notes').addEventListener('click', () => editLegNotes(r));
       box.querySelector('#rs-del').addEventListener('click', () => { if (confirm('Delete route "' + r.name + '"?')) { r.deleted = true; touch(r); saveRoutes(); if (shownRoute && shownRoute.id === r.id) showRoute(null); closeRouteSheet(); renderPlan(); syncSoon(); } });
@@ -669,10 +685,12 @@
   $('#rsheet').addEventListener('click', e => { if (e.target === $('#rsheet')) closeRouteSheet(); });
   function editLegNotes(r) {
     const box = $('#rsheet-box');
-    box.innerHTML = `<h2>Leg notes: ${esc(r.name || 'Route')}</h2><div class="small muted">A note is attached to the leg that starts at each waypoint.</div>` +
-      r.wps.slice(0, -1).map((w, i) => `<label style="display:block;margin-top:10px;font-size:12px;color:var(--muted)">Leg ${i + 1}: ${esc(w.name || 'waypoint ' + (i + 1))} to ${esc(r.wps[i + 1].name || 'waypoint ' + (i + 2))}<input type="text" data-leg="${i}" value="${esc(w.legNote || '')}" placeholder="for example: stay outside the red line"></label>`).join('') +
+    box.innerHTML = `<h2>Edit legs: ${esc(r.name || 'Route')}</h2><div class="small muted">"Instead of the wind reading" replaces the automatic point of sail text for that leg (for example: Motor out of the marina). Leave it blank to keep the automatic reading. A note is shown under the leg either way.</div>` +
+      r.wps.slice(0, -1).map((w, i) => `<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--line)"><div class="small"><b>Leg ${i + 1}</b> <span class="muted">${esc(w.name || 'waypoint ' + (i + 1))} to ${esc(r.wps[i + 1].name || 'waypoint ' + (i + 2))}</span></div>
+        <label style="display:block;margin-top:6px;font-size:12px;color:var(--muted)">Instead of the wind reading<input type="text" data-legtext="${i}" value="${esc(w.legText || '')}" placeholder="blank keeps the automatic reading"></label>
+        <label style="display:block;margin-top:6px;font-size:12px;color:var(--muted)">Note<input type="text" data-leg="${i}" value="${esc(w.legNote || '')}" placeholder="for example: stay outside the red line"></label></div>`).join('') +
       `<div class="toolbar" style="margin-top:12px"><button class="btn primary" id="ln-save">Save</button><button class="btn" id="ln-cancel">Cancel</button></div>`;
-    box.querySelector('#ln-save').addEventListener('click', () => { box.querySelectorAll('[data-leg]').forEach(inp => { r.wps[+inp.dataset.leg].legNote = inp.value.trim(); }); touch(r); saveRoutes(); syncSoon(); openRouteSheet(r); });
+    box.querySelector('#ln-save').addEventListener('click', () => { box.querySelectorAll('[data-leg]').forEach(inp => { r.wps[+inp.dataset.leg].legNote = inp.value.trim(); }); box.querySelectorAll('[data-legtext]').forEach(inp => { r.wps[+inp.dataset.legtext].legText = inp.value.trim(); }); touch(r); saveRoutes(); syncSoon(); openRouteSheet(r); });
     box.querySelector('#ln-cancel').addEventListener('click', () => openRouteSheet(r));
   }
   // Plan mode: tap waypoints on the map
@@ -704,9 +722,9 @@
     if (!live.length) { el.innerHTML = '<span class="muted">No routes yet. Tap Plan a route on the map, or describe one to Claude and it will appear here.</span>'; return; }
     const w = liveWind();
     el.innerHTML = live.map(r => { const n = narrative(r, w.from, w.kn); return `<div class="markitem"><div class="name">${esc(r.name || 'Route')}</div><div class="note">${r.wps.length} waypoints · ${n.total.toFixed(2)} nm · ${r.wps.filter(x => x.name).map(x => esc(x.name)).join(' → ') || 'open water'}${r.by ? ' · ' + esc(r.by) : ''}</div>
-      <div class="toolbar"><button class="btn sm primary" data-read="${r.id}">Read for today's wind</button><button class="btn sm" data-rshow="${r.id}">Show on map</button></div></div>`; }).join('');
+      <div class="toolbar"><button class="btn sm primary" data-read="${r.id}">Read for today's wind</button><button class="btn sm" data-rshow="${r.id}">${shownRoute && shownRoute.id === r.id ? 'Hide from map' : 'Show on map'}</button></div></div>`; }).join('');
     el.querySelectorAll('[data-read]').forEach(b => b.addEventListener('click', () => openRouteSheet(routes.find(r => r.id === b.dataset.read))));
-    el.querySelectorAll('[data-rshow]').forEach(b => b.addEventListener('click', () => { showRoute(routes.find(r => r.id === b.dataset.rshow)); document.querySelector('nav button[data-view=map]').click(); }));
+    el.querySelectorAll('[data-rshow]').forEach(b => b.addEventListener('click', () => { const r = routes.find(x => x.id === b.dataset.rshow); if (shownRoute && shownRoute.id === r.id) { showRoute(null); renderRoutes(); } else { showRoute(r); document.querySelector('nav button[data-view=map]').click(); } }));
   }
 
   /* ---------- Drills ---------- */
