@@ -280,6 +280,7 @@
       <div class="toolbar"><button class="btn primary" id="sheet-save">Save</button><button class="btn" id="sheet-cancel">Cancel</button></div>
     </div>
   </div>
+  <button id="updatebar" class="hidden" style="position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--safe-top) + 52px);z-index:950;background:var(--accent);color:#1a1a1a;border:0;border-radius:20px;padding:8px 14px;font-weight:600;font-size:13px;box-shadow:0 2px 10px rgba(0,0,0,.4)">Update available, tap to reload</button>
   <div id="rsheet" class="hidden">
     <div class="sheet-box" id="rsheet-box"></div>
   </div>
@@ -296,6 +297,7 @@
 <script>
 (function () {
   'use strict';
+  const APP_VERSION = '4.2';
   const LAKE = { lat: 40.975, lon: -96.870, zoom: 14 };
   const DRAFT_FT = 2.5;
   const CONTOUR_URL = "https://services5.arcgis.com/IOshH1zLrIieqrNk/arcgis/rest/services/LakeContours/FeatureServer/0/query"
@@ -844,6 +846,13 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncAll(); });
   window.addEventListener('online', syncAll);
   recoverTrack(); syncAll();
+  async function checkUpdate() {
+    try { const r = await fetch('index.html?u=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return; const t = await r.text(); const m = t.match(/APP_VERSION = '([^']+)'/); if (m && m[1] !== APP_VERSION) $('#updatebar').classList.remove('hidden'); } catch (e) {}
+  }
+  $('#updatebar').addEventListener('click', () => location.reload());
+  setTimeout(checkUpdate, 5000); setInterval(checkUpdate, 5 * 60e3);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+  setData('app version', APP_VERSION);
 
   /* ---------- Wind animation on the map ---------- */
   const WIND_BINS = [[0, 5, '#9fd8ff'], [5, 10, '#5fd38d'], [10, 15, '#ffcc4d'], [15, 20, '#ff9f40'], [20, 99, '#ff5a5a']];
