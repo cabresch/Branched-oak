@@ -189,7 +189,7 @@
       </div>
       <div id="hud">
         <div><b id="hud-sog">–</b> <span class="sub">kn</span> &nbsp; <b id="hud-cog">–</b><span class="sub">°</span></div>
-        <div class="sub" id="hud-sub">GPS off</div>
+        <div class="sub"><span id="hud-sub">GPS off</span> · <span id="hud-wake">☀ off</span></div>
       </div>
       <div id="status"></div>
     </section>
@@ -237,7 +237,7 @@
         <h2>Checklists</h2>
         <div id="lists"></div>
         <div class="toolbar"><button class="btn sm" id="btn-reset-lists">Reset all checkboxes</button> <button class="btn sm danger" id="btn-restore-lists">Restore default lists</button></div>
-        <p class="small muted">Lists are editable and saved on this phone. They are starters written for Buen Camino in her slip at Branched Oak; edit them as you learn what matters. Items marked (C22 manual) come from the Catalina 22 Technical Manual (2001), Checklists chapter. Motor items should follow the Honda owner's manual.</p>
+        <p class="small muted">Lists are editable and shared between both phones once you are signed in, ticks included. They are starters written for Buen Camino in her slip at Branched Oak; edit them as you learn what matters. Items marked (C22 manual) come from the Catalina 22 Technical Manual (2001), Checklists chapter. Motor items should follow the Honda owner's manual.</p>
       </div>
     </section>
 
@@ -260,7 +260,9 @@
         </div>
         <h3>GPS and screen</h3>
         <div class="card">
-          <p>Recording a track asks the phone to keep the screen on (a wake lock). Tracking pauses if you switch apps or lock the phone; it resumes when you come back. Keep the phone mounted with this page open while underway.</p>
+          <label class="chk-row"><input type="checkbox" id="keepawake-toggle"> Keep the screen on while the Map tab is showing</label>
+          <div class="small muted" id="wakestatus"></div>
+          <p class="small muted" style="margin-top:8px">The screen is always kept on while recording a sail. The phone never asks permission for this; it either works (iPhone needs a recent iOS) or it does not, and the sun symbol on the map shows which. Tracking pauses if you switch apps or lock the phone and resumes when you come back.</p>
           <p>Add this page to your home screen for a full-screen view: Safari share menu, then Add to Home Screen.</p>
         </div>
         <h3>Data status</h3>
@@ -297,7 +299,7 @@
 <script>
 (function () {
   'use strict';
-  const APP_VERSION = '4.2';
+  const APP_VERSION = '4.3';
   const LAKE = { lat: 40.975, lon: -96.870, zoom: 14 };
   const DRAFT_FT = 2.5;
   const CONTOUR_URL = "https://services5.arcgis.com/IOshH1zLrIieqrNk/arcgis/rest/services/LakeContours/FeatureServer/0/query"
@@ -323,6 +325,7 @@
     document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x === b));
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + b.dataset.view));
     if (b.dataset.view === 'map') setTimeout(() => { map.invalidateSize(); startWind(); }, 50); else stopWind();
+    setTimeout(applyWake, 60);
     if (b.dataset.view === 'marks') renderMarks();
     if (b.dataset.view === 'plan') renderPlan();
   }));
@@ -449,11 +452,23 @@
   map.on('dragstart', () => { followMe = false; $('#btn-locate').classList.remove('on'); });
   $('#btn-locate').addEventListener('click', () => { followMe = true; $('#btn-locate').classList.add('on'); startGps(); if (lastPos) map.setView([lastPos.lat, lastPos.lon], Math.max(map.getZoom(), 15)); });
 
+  let keepAwake = store.get('keepAwake', true), wakeStatus = 'off';
+  const wantWake = () => recording || (keepAwake && $('#view-map').classList.contains('active'));
   async function requestWake() {
-    try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } else toast('Screen wake lock not supported here; keep the screen on manually'); }
-    catch (e) { toast('Could not keep screen awake: ' + e.message); }
+    if (!('wakeLock' in navigator)) { wakeStatus = 'unsupported'; renderWakeStatus(); return; }
+    if (wakeLock || document.visibilityState !== 'visible') return;
+    try { wakeLock = await navigator.wakeLock.request('screen'); wakeStatus = 'on'; wakeLock.addEventListener('release', () => { wakeLock = null; wakeStatus = 'off'; renderWakeStatus(); if (wantWake() && document.visibilityState === 'visible') setTimeout(requestWake, 500); }); }
+    catch (e) { wakeStatus = 'failed'; }
+    renderWakeStatus();
   }
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { if (recording && !wakeLock) requestWake(); if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; startGps(); } } });
+  function releaseWake() { if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; } wakeStatus = 'off'; renderWakeStatus(); }
+  function applyWake() { wantWake() ? requestWake() : releaseWake(); }
+  function renderWakeStatus() {
+    const t = { on: 'Screen stays on', off: 'Screen may sleep', unsupported: 'Screen lock not supported on this phone', failed: 'Could not keep screen on' }[wakeStatus];
+    const el = $('#wakestatus'); if (el) el.textContent = t;
+    const h = $('#hud-wake'); if (h) { h.textContent = wakeStatus === 'on' ? '☀ on' : wakeStatus === 'unsupported' ? '☀ n/a' : '☀ off'; h.title = t; }
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { applyWake(); if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; startGps(); } } });
 
   function saveCurrentTrack() { store.set('track_current', { started: track[0] ? track[0].t : Date.now(), pts: track }); }
   const newId = () => Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
@@ -469,10 +484,10 @@
   $('#btn-track').addEventListener('click', async () => {
     if (!recording) {
       recording = true; track = []; trackLine = L.polyline([], { color: '#ffcc4d', weight: 3, opacity: .9 }).addTo(map);
-      $('#btn-track').classList.add('on'); startGps(); await requestWake(); toast('Recording sail. Screen will stay on.');
+      $('#btn-track').classList.add('on'); startGps(); await requestWake(); toast(wakeStatus === 'on' ? 'Recording sail. Screen will stay on.' : 'Recording sail. Keep the screen on manually.');
     } else {
       recording = false; $('#btn-track').classList.remove('on');
-      if (wakeLock) { wakeLock.release(); wakeLock = null; }
+      applyWake();
       if (track.length > 1) { const s = finishSail(track); toast('Sail saved (' + track.length + ' points)'); setTimeout(() => openSheet(s, false, 'sail'), 400); }
       else toast('Sail too short to save');
       localStorage.removeItem('track_current'); track = []; $('#hud-sub').textContent = lastPos ? `±${Math.round(lastPos.acc)} m` : 'GPS on';
@@ -765,136 +780,6 @@
   }
   function renderPlan() { renderRoutes(); renderDrills(); }
 
-  /* ---------- Shared sync (Supabase) ---------- */
-  const SB_URL = 'https://lzjvoymaxuyavysekkvi.supabase.co';
-  const SB_KEY = 'sb_publishable_m1O9J05i2D6BoRMFneRBeQ_XSBlO4vR';
-  const crew = () => store.get('crew', null);
-  const crewName = () => (crew() && crew().name) || '';
-  let syncState = { busy: false, last: store.get('syncLast', 0), error: crew() ? '' : 'nokey' };
-  async function sb(path, opts) {
-    opts = opts || {}; const c = crew(); if (!c) throw new Error('nokey');
-    const r = await fetch(SB_URL + '/rest/v1/' + path, { method: opts.method || 'GET', body: opts.body ? JSON.stringify(opts.body) : undefined,
-      headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'x-boat-key': c.key, 'Content-Type': 'application/json', Prefer: opts.prefer || 'return=minimal' } });
-    if (r.status === 401 || r.status === 403) throw new Error('badkey');
-    if (!r.ok) throw new Error('http ' + r.status);
-    const t = await r.text(); return t ? JSON.parse(t) : null;
-  }
-  const iso = ms => new Date(ms).toISOString();
-  async function syncAll() {
-    if (syncState.busy || !crew() || !navigator.onLine) return; syncState.busy = true; renderSyncStatus();
-    try {
-      // push dirty marks and sails
-      const dm = marks.filter(m => m.dirty).map(m => ({ id: m.id, name: m.name, note: m.note || '', story: m.story || '', kind: m.kind || 'mark', lat: m.lat, lon: m.lon, created_at: iso(m.at || m.updated), updated_at: iso(m.updated), deleted: !!m.deleted, device: m.by || '' }));
-      if (dm.length) { await sb('marks', { method: 'POST', body: dm, prefer: 'resolution=merge-duplicates,return=minimal' }); marks.forEach(m => m.dirty = false); }
-      const ds = sails.filter(t => t.dirty).map(t => ({ id: t.id, name: t.name || '', story: t.story || '', started: iso(t.started), ended: iso(t.ended), pts: t.pts, updated_at: iso(t.updated), deleted: !!t.deleted, device: t.by || '' }));
-      if (ds.length) { await sb('sails', { method: 'POST', body: ds, prefer: 'resolution=merge-duplicates,return=minimal' }); sails.forEach(t => t.dirty = false); }
-      const dr = routes.filter(r => r.dirty).map(r => ({ id: r.id, name: r.name || '', story: r.story || '', waypoints: r.wps, updated_at: iso(r.updated), deleted: !!r.deleted, device: r.by || '' }));
-      if (dr.length) { await sb('routes', { method: 'POST', body: dr, prefer: 'resolution=merge-duplicates,return=minimal' }); routes.forEach(r => r.dirty = false); }
-      const dl = drillLog.filter(d => d.dirty).map(d => ({ id: d.id, drill: d.drill, at: iso(d.at), who: d.who || '', rating: d.rating || 0, notes: d.notes || '', updated_at: iso(d.updated), deleted: !!d.deleted, device: d.by || '' }));
-      if (dl.length) { await sb('drill_log', { method: 'POST', body: dl, prefer: 'resolution=merge-duplicates,return=minimal' }); drillLog.forEach(d => d.dirty = false); }
-      // pull everything changed since the last pull (minus a minute of slack)
-      const since = iso(Math.max(0, syncState.last - 60000));
-      const rm = await sb('marks?select=*&updated_at=gt.' + encodeURIComponent(since));
-      let changed = false;
-      rm.forEach(r => { const u = Date.parse(r.updated_at); const loc = marks.find(m => m.id === r.id);
-        if (!loc) { marks.push({ id: r.id, name: r.name, note: r.note || '', story: r.story || '', kind: r.kind || 'mark', lat: r.lat, lon: r.lon, at: Date.parse(r.created_at), updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
-        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { name: r.name, note: r.note || '', story: r.story || '', kind: r.kind || 'mark', lat: r.lat, lon: r.lon, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
-      const rs = await sb('sails?select=*&updated_at=gt.' + encodeURIComponent(since));
-      rs.forEach(r => { const u = Date.parse(r.updated_at); const loc = sails.find(t => t.id === r.id);
-        if (!loc) { sails.push({ id: r.id, name: r.name || '', story: r.story || '', started: Date.parse(r.started), ended: Date.parse(r.ended), pts: r.pts, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
-        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { name: r.name || '', story: r.story || '', updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
-      const rr = await sb('routes?select=*&updated_at=gt.' + encodeURIComponent(since));
-      rr.forEach(r => { const u = Date.parse(r.updated_at); const loc = routes.find(x => x.id === r.id);
-        if (!loc) { routes.push({ id: r.id, name: r.name || '', story: r.story || '', wps: r.waypoints, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
-        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { name: r.name || '', story: r.story || '', wps: r.waypoints, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
-      const rl = await sb('drill_log?select=*&updated_at=gt.' + encodeURIComponent(since));
-      rl.forEach(r => { const u = Date.parse(r.updated_at); const loc = drillLog.find(x => x.id === r.id);
-        if (!loc) { drillLog.push({ id: r.id, drill: r.drill, at: Date.parse(r.at), who: r.who || '', rating: r.rating || 0, notes: r.notes || '', updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
-        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { drill: r.drill, at: Date.parse(r.at), who: r.who || '', rating: r.rating || 0, notes: r.notes || '', updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
-      syncState.last = Date.now(); store.set('syncLast', syncState.last); syncState.error = '';
-      store.set('marks', marks); saveSails(); saveRoutes(); saveDrillLog();
-      if (changed) { drawMarks(); if ($('#view-marks').classList.contains('active')) renderMarks(); if ($('#view-plan').classList.contains('active')) renderPlan(); if (shownRoute) showRoute(routes.find(r => r.id === shownRoute.id) || null); }
-    } catch (e) { syncState.error = e.message === 'badkey' ? 'badkey' : (e.message === 'nokey' ? 'nokey' : 'offline'); }
-    syncState.busy = false; renderSyncStatus();
-  }
-  let syncTimer = null;
-  function syncSoon() { clearTimeout(syncTimer); syncTimer = setTimeout(syncAll, 1500); }
-  function renderSyncStatus() {
-    const el = $('#syncstatus'); if (!el) return; const c = crew();
-    const pending = marks.filter(m => m.dirty).length + sails.filter(t => t.dirty).length + routes.filter(r => r.dirty).length + drillLog.filter(d => d.dirty).length;
-    let txt;
-    if (!c) txt = 'Not syncing yet. Enter the crew name and passphrase on the Info tab to share marks and sails between phones.';
-    else if (syncState.busy) txt = 'Syncing…';
-    else if (syncState.error === 'badkey') txt = 'Passphrase not accepted. Check it on the Info tab.';
-    else if (syncState.error === 'offline') txt = 'Offline. ' + (pending ? pending + ' change(s) waiting to sync.' : 'Will sync when signal returns.');
-    else txt = 'Synced ' + (syncState.last ? fmtTime(new Date(syncState.last)) : '') + (pending ? ' · ' + pending + ' waiting' : '') + ' · signed in as ' + esc(c.name);
-    el.textContent = txt; el.classList.toggle('warn', !c || !!syncState.error);
-    const info = $('#crewstatus'); if (info) info.textContent = c ? ('Signed in as ' + c.name + (syncState.error === 'badkey' ? ', passphrase not accepted' : syncState.error === 'offline' ? ', offline' : ', syncing')) : 'Not signed in';
-  }
-  $('#crew-save').addEventListener('click', async () => {
-    const name = $('#crew-name').value.trim(), key = $('#crew-key').value.trim();
-    if (!name || !key) { toast('Enter both a name and the passphrase'); return; }
-    store.set('crew', { name, key }); syncState.error = ''; syncState.last = 0; store.set('syncLast', 0);
-    try { const ok = await sb('rpc/crew_check', { method: 'POST', body: {} }); if (ok !== true) { syncState.error = 'badkey'; renderSyncStatus(); toast('Passphrase not accepted'); return; } }
-    catch (e) { syncState.error = 'offline'; renderSyncStatus(); toast('Could not reach the server, will retry'); return; }
-    marks.forEach(m => { if (!m.by) m.by = name; m.dirty = true; }); sails.forEach(t => { if (!t.by) t.by = name; t.dirty = true; }); routes.forEach(r => { if (!r.by) r.by = name; r.dirty = true; }); drillLog.forEach(d => { if (!d.by) d.by = name; d.dirty = true; });
-    toast('Signed in as ' + name); await syncAll();
-  });
-  $('#crew-signout').addEventListener('click', () => { localStorage.removeItem('crew'); syncState.error = 'nokey'; renderSyncStatus(); $('#crew-name').value = ''; $('#crew-key').value = ''; toast('Signed out on this phone'); });
-  (function initCrew() { const c = crew(); if (c) { $('#crew-name').value = c.name; $('#crew-key').value = c.key; } renderSyncStatus(); })();
-  setInterval(() => { if (document.visibilityState === 'visible') syncAll(); }, 30000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncAll(); });
-  window.addEventListener('online', syncAll);
-  recoverTrack(); syncAll();
-  async function checkUpdate() {
-    try { const r = await fetch('index.html?u=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return; const t = await r.text(); const m = t.match(/APP_VERSION = '([^']+)'/); if (m && m[1] !== APP_VERSION) $('#updatebar').classList.remove('hidden'); } catch (e) {}
-  }
-  $('#updatebar').addEventListener('click', () => location.reload());
-  setTimeout(checkUpdate, 5000); setInterval(checkUpdate, 5 * 60e3);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
-  setData('app version', APP_VERSION);
-
-  /* ---------- Wind animation on the map ---------- */
-  const WIND_BINS = [[0, 5, '#9fd8ff'], [5, 10, '#5fd38d'], [10, 15, '#ffcc4d'], [15, 20, '#ff9f40'], [20, 99, '#ff5a5a']];
-  const windColor = kn => (WIND_BINS.find(b => kn < b[1]) || WIND_BINS[WIND_BINS.length - 1])[2];
-  const wc = $('#windcanvas'), wctx = wc.getContext('2d');
-  let windOn = store.get('windAnim', true), particles = [], windRaf = null, windState = null;
-  $('#btn-wind').classList.toggle('on', windOn);
-  $('#btn-wind').addEventListener('click', () => { windOn = !windOn; store.set('windAnim', windOn); $('#btn-wind').classList.toggle('on', windOn); $('#windlegend').classList.toggle('hidden', !windOn); windOn ? startWind() : stopWind(); });
-  function sizeWind() { const r = wc.getBoundingClientRect(); const dpr = Math.min(2, window.devicePixelRatio || 1); wc.width = Math.round(r.width * dpr); wc.height = Math.round(r.height * dpr); wctx.setTransform(dpr, 0, 0, dpr, 0, 0); wc._w = r.width; wc._h = r.height; }
-  function setWindState() {
-    if (!wx || !wx.current) return;
-    const c = wx.current; const kn = c.wind_speed_10m, toDeg = (c.wind_direction_10m + 180) % 360; const rad = toDeg * Math.PI / 180;
-    windState = { kn, dx: Math.sin(rad), dy: -Math.cos(rad), color: windColor(kn), dir: compass(c.wind_direction_10m) };
-    $('#windlegend').innerHTML = `<span class="lbl">wind ${Math.round(kn)} kn from ${windState.dir}</span>` + WIND_BINS.map(b => `<span><i style="background:${b[2]}"></i>${b[1] > 50 ? b[0] + '+' : b[0] + '-' + b[1]}</span>`).join('');
-    $('#windlegend').classList.toggle('hidden', !windOn);
-  }
-  function seed(n) { particles = []; for (let i = 0; i < n; i++) particles.push({ x: Math.random() * wc._w, y: Math.random() * wc._h, life: Math.random() * 300 }); }
-  function drawArrow(x, y, dx, dy, col) { const s = 6; wctx.save(); wctx.translate(x, y); wctx.rotate(Math.atan2(dy, dx) + Math.PI / 2); wctx.beginPath(); wctx.moveTo(0, -s); wctx.lineTo(s * .6, s); wctx.lineTo(0, s * .45); wctx.lineTo(-s * .6, s); wctx.closePath(); wctx.fillStyle = col; wctx.fill(); wctx.restore(); }
-  function windFrame() {
-    if (!windOn || !windState) { windRaf = null; return; }
-    if (!wc._w) sizeWind();
-    wctx.clearRect(0, 0, wc._w, wc._h);
-    const speed = 0.25 + Math.min(20, windState.kn) * 0.12; // px per frame
-    wctx.globalAlpha = 0.85;
-    for (const p of particles) {
-      p.x += windState.dx * speed; p.y += windState.dy * speed; p.life++;
-      if (p.x < -10 || p.x > wc._w + 10 || p.y < -10 || p.y > wc._h + 10 || p.life > 420) { p.life = 0; if (Math.abs(windState.dx) > Math.abs(windState.dy)) { p.x = windState.dx > 0 ? -5 : wc._w + 5; p.y = Math.random() * wc._h; } else { p.y = windState.dy > 0 ? -5 : wc._h + 5; p.x = Math.random() * wc._w; } }
-      const fade = Math.min(1, p.life / 40, (420 - p.life) / 40);
-      wctx.globalAlpha = 0.8 * fade;
-      drawArrow(p.x, p.y, windState.dx, windState.dy, windState.color);
-    }
-    windRaf = requestAnimationFrame(windFrame);
-  }
-  function startWind() { if (!windOn || windRaf) return; sizeWind(); if (!particles.length) seed(Math.round(wc._w * wc._h / 14000)); windFrame(); }
-  function stopWind() { if (windRaf) cancelAnimationFrame(windRaf); windRaf = null; wctx.clearRect(0, 0, wc._w || 0, wc._h || 0); }
-  window.addEventListener('resize', () => { sizeWind(); particles = []; if (windOn) seed(Math.round(wc._w * wc._h / 14000)); });
-  document.addEventListener('visibilitychange', () => { document.visibilityState === 'visible' ? startWind() : stopWind(); });
-
-  /* ---------- Zoom buttons ---------- */
-  $('#btn-zin').addEventListener('click', () => map.zoomIn());
-  $('#btn-zout').addEventListener('click', () => map.zoomOut());
-
   /* ---------- Checklists ---------- */
   const DEFAULT_LISTS = [
     { name: 'Leaving for the Lake', items: [
@@ -983,20 +868,164 @@
       'Coming home: same steps in reverse, then launch back at Branched Oak and return to the slip',
       'After the trip: rinse trailer, check bearings, restock spares' ] }
   ];
-  const LISTS_KEY = 'lists_v2';
-  let lists = store.get(LISTS_KEY, null) || JSON.parse(JSON.stringify(DEFAULT_LISTS)).map(l => ({ name: l.name, items: l.items.map(t => ({ t, done: false })) }));
+  const LISTS_KEY = 'lists_v3';
+  const defaultLists = () => JSON.parse(JSON.stringify(DEFAULT_LISTS)).map((l, i) => ({ id: 'default-' + i, name: l.name, items: l.items.map(t => ({ t, done: false })), updated: 1, deleted: false }));
+  let lists = store.get(LISTS_KEY, null);
+  if (!lists) { const old = store.get('lists_v2', null); lists = old ? old.map((l, i) => ({ id: 'default-' + i, name: l.name, items: l.items, updated: Date.now(), deleted: false, dirty: true })) : defaultLists(); }
+  const liveLists = () => lists.filter(l => !l.deleted);
   function saveLists() { store.set(LISTS_KEY, lists); }
+  function touchList(l) { touch(l); saveLists(); syncSoon(); }
   function renderLists() {
-    $('#lists').innerHTML = lists.map((l, li) => `<div class="card"><h2 style="font-size:15px;margin:0 0 6px">${esc(l.name)}</h2>${l.items.map((it, ii) => `<label class="chk ${it.done ? 'done' : ''}"><input type="checkbox" data-l="${li}" data-i="${ii}" ${it.done ? 'checked' : ''}><span>${esc(it.t)}</span><button class="x" data-xl="${li}" data-xi="${ii}" title="Remove">×</button></label>`).join('')}
+    const shown = liveLists();
+    $('#lists').innerHTML = shown.map((l, li) => `<div class="card"><h2 style="font-size:15px;margin:0 0 6px">${esc(l.name)}</h2>${l.items.map((it, ii) => `<label class="chk ${it.done ? 'done' : ''}"><input type="checkbox" data-l="${li}" data-i="${ii}" ${it.done ? 'checked' : ''}><span>${esc(it.t)}</span><button class="x" data-xl="${li}" data-xi="${ii}" title="Remove">×</button></label>`).join('')}
       <div class="addrow"><input type="text" placeholder="Add item" data-add="${li}"><button class="btn sm" data-addbtn="${li}">Add</button></div></div>`).join('');
-    $('#lists').querySelectorAll('input[type=checkbox]').forEach(c => c.addEventListener('change', () => { lists[c.dataset.l].items[c.dataset.i].done = c.checked; saveLists(); renderLists(); }));
-    $('#lists').querySelectorAll('.x').forEach(b => b.addEventListener('click', e => { e.preventDefault(); lists[b.dataset.xl].items.splice(b.dataset.xi, 1); saveLists(); renderLists(); }));
-    $('#lists').querySelectorAll('[data-addbtn]').forEach(b => b.addEventListener('click', () => { const inp = $('#lists').querySelector(`input[data-add="${b.dataset.addbtn}"]`); const v = inp.value.trim(); if (!v) return; lists[b.dataset.addbtn].items.push({ t: v, done: false }); saveLists(); renderLists(); }));
+    $('#lists').querySelectorAll('input[type=checkbox]').forEach(c => c.addEventListener('change', () => { const l = shown[c.dataset.l]; l.items[c.dataset.i].done = c.checked; touchList(l); renderLists(); }));
+    $('#lists').querySelectorAll('.x').forEach(b => b.addEventListener('click', e => { e.preventDefault(); const l = shown[b.dataset.xl]; l.items.splice(b.dataset.xi, 1); touchList(l); renderLists(); }));
+    $('#lists').querySelectorAll('[data-addbtn]').forEach(b => b.addEventListener('click', () => { const inp = $('#lists').querySelector(`input[data-add="${b.dataset.addbtn}"]`); const v = inp.value.trim(); if (!v) return; const l = shown[b.dataset.addbtn]; l.items.push({ t: v, done: false }); touchList(l); renderLists(); }));
     $('#lists').querySelectorAll('input[data-add]').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') $('#lists').querySelector(`[data-addbtn="${i.dataset.add}"]`).click(); }));
   }
-  $('#btn-reset-lists').addEventListener('click', () => { lists.forEach(l => l.items.forEach(i => i.done = false)); saveLists(); renderLists(); });
-  $('#btn-restore-lists').addEventListener('click', () => { if (confirm('Replace your lists with the defaults?')) { lists = JSON.parse(JSON.stringify(DEFAULT_LISTS)).map(l => ({ name: l.name, items: l.items.map(t => ({ t, done: false })) })); saveLists(); renderLists(); } });
+  $('#btn-reset-lists').addEventListener('click', () => { liveLists().forEach(l => { l.items.forEach(i => i.done = false); touch(l); }); saveLists(); syncSoon(); renderLists(); });
+  $('#btn-restore-lists').addEventListener('click', () => { if (confirm('Replace the lists with the defaults on both phones?')) { lists.forEach(l => { l.deleted = true; touch(l); }); defaultLists().forEach(d => { const ex = lists.find(l => l.id === d.id); if (ex) { Object.assign(ex, { name: d.name, items: d.items, deleted: false }); touch(ex); } else lists.push(touch(d)); }); saveLists(); syncSoon(); renderLists(); } });
   renderLists();
+
+  /* ---------- Shared sync (Supabase) ---------- */
+  const SB_URL = 'https://lzjvoymaxuyavysekkvi.supabase.co';
+  const SB_KEY = 'sb_publishable_m1O9J05i2D6BoRMFneRBeQ_XSBlO4vR';
+  const crew = () => store.get('crew', null);
+  const crewName = () => (crew() && crew().name) || '';
+  let syncState = { busy: false, last: store.get('syncLast', 0), error: crew() ? '' : 'nokey' };
+  async function sb(path, opts) {
+    opts = opts || {}; const c = crew(); if (!c) throw new Error('nokey');
+    const r = await fetch(SB_URL + '/rest/v1/' + path, { method: opts.method || 'GET', body: opts.body ? JSON.stringify(opts.body) : undefined,
+      headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'x-boat-key': c.key, 'Content-Type': 'application/json', Prefer: opts.prefer || 'return=minimal' } });
+    if (r.status === 401 || r.status === 403) throw new Error('badkey');
+    if (!r.ok) throw new Error('http ' + r.status);
+    const t = await r.text(); return t ? JSON.parse(t) : null;
+  }
+  const iso = ms => new Date(ms).toISOString();
+  async function syncAll() {
+    if (syncState.busy || !crew() || !navigator.onLine) return; syncState.busy = true; renderSyncStatus();
+    try {
+      // push dirty marks and sails
+      const dm = marks.filter(m => m.dirty).map(m => ({ id: m.id, name: m.name, note: m.note || '', story: m.story || '', kind: m.kind || 'mark', lat: m.lat, lon: m.lon, created_at: iso(m.at || m.updated), updated_at: iso(m.updated), deleted: !!m.deleted, device: m.by || '' }));
+      if (dm.length) { await sb('marks', { method: 'POST', body: dm, prefer: 'resolution=merge-duplicates,return=minimal' }); marks.forEach(m => m.dirty = false); }
+      const ds = sails.filter(t => t.dirty).map(t => ({ id: t.id, name: t.name || '', story: t.story || '', started: iso(t.started), ended: iso(t.ended), pts: t.pts, updated_at: iso(t.updated), deleted: !!t.deleted, device: t.by || '' }));
+      if (ds.length) { await sb('sails', { method: 'POST', body: ds, prefer: 'resolution=merge-duplicates,return=minimal' }); sails.forEach(t => t.dirty = false); }
+      const dr = routes.filter(r => r.dirty).map(r => ({ id: r.id, name: r.name || '', story: r.story || '', waypoints: r.wps, updated_at: iso(r.updated), deleted: !!r.deleted, device: r.by || '' }));
+      if (dr.length) { await sb('routes', { method: 'POST', body: dr, prefer: 'resolution=merge-duplicates,return=minimal' }); routes.forEach(r => r.dirty = false); }
+      const dli = lists.filter(l => l.dirty).map(l => ({ id: l.id, name: l.name, items: l.items, updated_at: iso(l.updated), deleted: !!l.deleted, device: crewName() }));
+      if (dli.length) { await sb('lists', { method: 'POST', body: dli, prefer: 'resolution=merge-duplicates,return=minimal' }); lists.forEach(l => l.dirty = false); }
+      const dl = drillLog.filter(d => d.dirty).map(d => ({ id: d.id, drill: d.drill, at: iso(d.at), who: d.who || '', rating: d.rating || 0, notes: d.notes || '', updated_at: iso(d.updated), deleted: !!d.deleted, device: d.by || '' }));
+      if (dl.length) { await sb('drill_log', { method: 'POST', body: dl, prefer: 'resolution=merge-duplicates,return=minimal' }); drillLog.forEach(d => d.dirty = false); }
+      // pull everything changed since the last pull (minus a minute of slack)
+      const since = iso(Math.max(0, syncState.last - 60000));
+      const rm = await sb('marks?select=*&updated_at=gt.' + encodeURIComponent(since));
+      let changed = false;
+      rm.forEach(r => { const u = Date.parse(r.updated_at); const loc = marks.find(m => m.id === r.id);
+        if (!loc) { marks.push({ id: r.id, name: r.name, note: r.note || '', story: r.story || '', kind: r.kind || 'mark', lat: r.lat, lon: r.lon, at: Date.parse(r.created_at), updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
+        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { name: r.name, note: r.note || '', story: r.story || '', kind: r.kind || 'mark', lat: r.lat, lon: r.lon, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
+      const rs = await sb('sails?select=*&updated_at=gt.' + encodeURIComponent(since));
+      rs.forEach(r => { const u = Date.parse(r.updated_at); const loc = sails.find(t => t.id === r.id);
+        if (!loc) { sails.push({ id: r.id, name: r.name || '', story: r.story || '', started: Date.parse(r.started), ended: Date.parse(r.ended), pts: r.pts, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
+        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { name: r.name || '', story: r.story || '', updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
+      const rr = await sb('routes?select=*&updated_at=gt.' + encodeURIComponent(since));
+      rr.forEach(r => { const u = Date.parse(r.updated_at); const loc = routes.find(x => x.id === r.id);
+        if (!loc) { routes.push({ id: r.id, name: r.name || '', story: r.story || '', wps: r.waypoints, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
+        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { name: r.name || '', story: r.story || '', wps: r.waypoints, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
+      const rli = await sb('lists?select=*&updated_at=gt.' + encodeURIComponent(since));
+      rli.forEach(r => { const u = Date.parse(r.updated_at); const loc = lists.find(x => x.id === r.id);
+        if (!loc) { lists.push({ id: r.id, name: r.name, items: r.items, updated: u, deleted: !!r.deleted }); changed = true; }
+        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { name: r.name, items: r.items, updated: u, deleted: !!r.deleted }); changed = true; } });
+      const rl = await sb('drill_log?select=*&updated_at=gt.' + encodeURIComponent(since));
+      rl.forEach(r => { const u = Date.parse(r.updated_at); const loc = drillLog.find(x => x.id === r.id);
+        if (!loc) { drillLog.push({ id: r.id, drill: r.drill, at: Date.parse(r.at), who: r.who || '', rating: r.rating || 0, notes: r.notes || '', updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
+        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { drill: r.drill, at: Date.parse(r.at), who: r.who || '', rating: r.rating || 0, notes: r.notes || '', updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
+      syncState.last = Date.now(); store.set('syncLast', syncState.last); syncState.error = '';
+      store.set('marks', marks); saveSails(); saveRoutes(); saveDrillLog(); saveLists();
+      if (changed) { drawMarks(); if ($('#view-lists').classList.contains('active')) renderLists(); if ($('#view-marks').classList.contains('active')) renderMarks(); if ($('#view-plan').classList.contains('active')) renderPlan(); if (shownRoute) showRoute(routes.find(r => r.id === shownRoute.id) || null); }
+    } catch (e) { syncState.error = e.message === 'badkey' ? 'badkey' : (e.message === 'nokey' ? 'nokey' : 'offline'); }
+    syncState.busy = false; renderSyncStatus();
+  }
+  let syncTimer = null;
+  function syncSoon() { clearTimeout(syncTimer); syncTimer = setTimeout(syncAll, 1500); }
+  function renderSyncStatus() {
+    const el = $('#syncstatus'); if (!el) return; const c = crew();
+    const pending = marks.filter(m => m.dirty).length + sails.filter(t => t.dirty).length + routes.filter(r => r.dirty).length + drillLog.filter(d => d.dirty).length + lists.filter(l => l.dirty).length;
+    let txt;
+    if (!c) txt = 'Not syncing yet. Enter the crew name and passphrase on the Info tab to share marks and sails between phones.';
+    else if (syncState.busy) txt = 'Syncing…';
+    else if (syncState.error === 'badkey') txt = 'Passphrase not accepted. Check it on the Info tab.';
+    else if (syncState.error === 'offline') txt = 'Offline. ' + (pending ? pending + ' change(s) waiting to sync.' : 'Will sync when signal returns.');
+    else txt = 'Synced ' + (syncState.last ? fmtTime(new Date(syncState.last)) : '') + (pending ? ' · ' + pending + ' waiting' : '') + ' · signed in as ' + esc(c.name);
+    el.textContent = txt; el.classList.toggle('warn', !c || !!syncState.error);
+    const info = $('#crewstatus'); if (info) info.textContent = c ? ('Signed in as ' + c.name + (syncState.error === 'badkey' ? ', passphrase not accepted' : syncState.error === 'offline' ? ', offline' : ', syncing')) : 'Not signed in';
+  }
+  $('#crew-save').addEventListener('click', async () => {
+    const name = $('#crew-name').value.trim(), key = $('#crew-key').value.trim();
+    if (!name || !key) { toast('Enter both a name and the passphrase'); return; }
+    store.set('crew', { name, key }); syncState.error = ''; syncState.last = 0; store.set('syncLast', 0);
+    try { const ok = await sb('rpc/crew_check', { method: 'POST', body: {} }); if (ok !== true) { syncState.error = 'badkey'; renderSyncStatus(); toast('Passphrase not accepted'); return; } }
+    catch (e) { syncState.error = 'offline'; renderSyncStatus(); toast('Could not reach the server, will retry'); return; }
+    marks.forEach(m => { if (!m.by) m.by = name; m.dirty = true; }); sails.forEach(t => { if (!t.by) t.by = name; t.dirty = true; }); routes.forEach(r => { if (!r.by) r.by = name; r.dirty = true; }); drillLog.forEach(d => { if (!d.by) d.by = name; d.dirty = true; }); lists.forEach(l => { l.dirty = true; });
+    toast('Signed in as ' + name); await syncAll();
+  });
+  $('#crew-signout').addEventListener('click', () => { localStorage.removeItem('crew'); syncState.error = 'nokey'; renderSyncStatus(); $('#crew-name').value = ''; $('#crew-key').value = ''; toast('Signed out on this phone'); });
+  (function initCrew() { const c = crew(); if (c) { $('#crew-name').value = c.name; $('#crew-key').value = c.key; } renderSyncStatus(); })();
+  setInterval(() => { if (document.visibilityState === 'visible') syncAll(); }, 30000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncAll(); });
+  window.addEventListener('online', syncAll);
+  $('#keepawake-toggle').checked = keepAwake;
+  $('#keepawake-toggle').addEventListener('change', e => { keepAwake = e.target.checked; store.set('keepAwake', keepAwake); applyWake(); });
+  applyWake(); renderWakeStatus();
+  recoverTrack(); syncAll();
+  async function checkUpdate() {
+    try { const r = await fetch('index.html?u=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return; const t = await r.text(); const m = t.match(/APP_VERSION = '([^']+)'/); if (m && m[1] !== APP_VERSION) $('#updatebar').classList.remove('hidden'); } catch (e) {}
+  }
+  $('#updatebar').addEventListener('click', () => location.reload());
+  setTimeout(checkUpdate, 5000); setInterval(checkUpdate, 5 * 60e3);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+  setData('app version', APP_VERSION);
+
+  /* ---------- Wind animation on the map ---------- */
+  const WIND_BINS = [[0, 5, '#9fd8ff'], [5, 10, '#5fd38d'], [10, 15, '#ffcc4d'], [15, 20, '#ff9f40'], [20, 99, '#ff5a5a']];
+  const windColor = kn => (WIND_BINS.find(b => kn < b[1]) || WIND_BINS[WIND_BINS.length - 1])[2];
+  const wc = $('#windcanvas'), wctx = wc.getContext('2d');
+  let windOn = store.get('windAnim', true), particles = [], windRaf = null, windState = null;
+  $('#btn-wind').classList.toggle('on', windOn);
+  $('#btn-wind').addEventListener('click', () => { windOn = !windOn; store.set('windAnim', windOn); $('#btn-wind').classList.toggle('on', windOn); $('#windlegend').classList.toggle('hidden', !windOn); windOn ? startWind() : stopWind(); });
+  function sizeWind() { const r = wc.getBoundingClientRect(); const dpr = Math.min(2, window.devicePixelRatio || 1); wc.width = Math.round(r.width * dpr); wc.height = Math.round(r.height * dpr); wctx.setTransform(dpr, 0, 0, dpr, 0, 0); wc._w = r.width; wc._h = r.height; }
+  function setWindState() {
+    if (!wx || !wx.current) return;
+    const c = wx.current; const kn = c.wind_speed_10m, toDeg = (c.wind_direction_10m + 180) % 360; const rad = toDeg * Math.PI / 180;
+    windState = { kn, dx: Math.sin(rad), dy: -Math.cos(rad), color: windColor(kn), dir: compass(c.wind_direction_10m) };
+    $('#windlegend').innerHTML = `<span class="lbl">wind ${Math.round(kn)} kn from ${windState.dir}</span>` + WIND_BINS.map(b => `<span><i style="background:${b[2]}"></i>${b[1] > 50 ? b[0] + '+' : b[0] + '-' + b[1]}</span>`).join('');
+    $('#windlegend').classList.toggle('hidden', !windOn);
+  }
+  function seed(n) { particles = []; for (let i = 0; i < n; i++) particles.push({ x: Math.random() * wc._w, y: Math.random() * wc._h, life: Math.random() * 300 }); }
+  function drawArrow(x, y, dx, dy, col) { const s = 6; wctx.save(); wctx.translate(x, y); wctx.rotate(Math.atan2(dy, dx) + Math.PI / 2); wctx.beginPath(); wctx.moveTo(0, -s); wctx.lineTo(s * .6, s); wctx.lineTo(0, s * .45); wctx.lineTo(-s * .6, s); wctx.closePath(); wctx.fillStyle = col; wctx.fill(); wctx.restore(); }
+  function windFrame() {
+    if (!windOn || !windState) { windRaf = null; return; }
+    if (!wc._w) sizeWind();
+    wctx.clearRect(0, 0, wc._w, wc._h);
+    const speed = 0.25 + Math.min(20, windState.kn) * 0.12; // px per frame
+    wctx.globalAlpha = 0.85;
+    for (const p of particles) {
+      p.x += windState.dx * speed; p.y += windState.dy * speed; p.life++;
+      if (p.x < -10 || p.x > wc._w + 10 || p.y < -10 || p.y > wc._h + 10 || p.life > 420) { p.life = 0; if (Math.abs(windState.dx) > Math.abs(windState.dy)) { p.x = windState.dx > 0 ? -5 : wc._w + 5; p.y = Math.random() * wc._h; } else { p.y = windState.dy > 0 ? -5 : wc._h + 5; p.x = Math.random() * wc._w; } }
+      const fade = Math.min(1, p.life / 40, (420 - p.life) / 40);
+      wctx.globalAlpha = 0.8 * fade;
+      drawArrow(p.x, p.y, windState.dx, windState.dy, windState.color);
+    }
+    windRaf = requestAnimationFrame(windFrame);
+  }
+  function startWind() { if (!windOn || windRaf) return; sizeWind(); if (!particles.length) seed(Math.round(wc._w * wc._h / 14000)); windFrame(); }
+  function stopWind() { if (windRaf) cancelAnimationFrame(windRaf); windRaf = null; wctx.clearRect(0, 0, wc._w || 0, wc._h || 0); }
+  window.addEventListener('resize', () => { sizeWind(); particles = []; if (windOn) seed(Math.round(wc._w * wc._h / 14000)); });
+  document.addEventListener('visibilitychange', () => { document.visibilityState === 'visible' ? startWind() : stopWind(); });
+
+  /* ---------- Zoom buttons ---------- */
+  $('#btn-zin').addEventListener('click', () => map.zoomIn());
+  $('#btn-zout').addEventListener('click', () => map.zoomOut());
 
   /* ---------- Go ---------- */
   loadContours(); loadWx(); setInterval(loadWx, 15 * 60e3);
