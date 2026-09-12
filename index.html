@@ -59,6 +59,7 @@
   .nudge-title { font-size: 13px; margin-bottom: 8px; }
   .nudge-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; align-items: center; justify-items: center; }
   .nudge-grid button[data-n] { width: 52px; height: 44px; font-size: 22px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; }
+  #rsheet { position: fixed; inset: 0; z-index: 890; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; }
   #sheet { position: fixed; inset: 0; z-index: 900; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; }
   .sheet-box { background: var(--panel); border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; padding: 16px 16px calc(var(--safe-bottom) + 16px); width: 100%; max-height: 90%; overflow: auto; }
   .sheet-box h2 { font-size: 17px; margin: 0 0 10px; }
@@ -79,6 +80,26 @@
   .pos-dot { width: 16px; height: 16px; border-radius: 50%; background: #2f8bff; border: 3px solid #fff; box-shadow: 0 0 0 2px rgba(47,139,255,.5); }
   .pos-heading { width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 18px solid #2f8bff; transform-origin: 50% 100%; margin-left: -8px; margin-top: -26px; opacity: .9; }
   .mark-pin { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2px solid #1a1a1a; }
+  .place-pin { position: relative; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid #1a1a1a; }
+  .place-pin span { position: absolute; left: 14px; top: -4px; color: #fff; font-size: 11px; font-weight: 600; white-space: nowrap; text-shadow: 0 0 3px #000, 0 0 3px #000; }
+  .wp-num { width: 20px; height: 20px; border-radius: 50%; background: #5fd38d; color: #0b2a3f; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 2px solid #0b2a3f; }
+  .leg-arrow { width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 14px solid #5fd38d; opacity: .95; }
+  #planbar { position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px; z-index: 600; background: rgba(16,52,77,.96); border: 1px solid #5fd38d; border-radius: 12px; padding: 10px 12px; width: min(94%, 340px); box-shadow: 0 2px 12px rgba(0,0,0,.45); }
+  .chk-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; }
+  .chk-row input { width: 20px; height: 20px; accent-color: var(--accent); }
+  .leg { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .leg:last-child { border-bottom: 0; }
+  .leg .pos { font-weight: 600; }
+  .leg .turn { color: var(--accent); font-size: 12px; }
+  .leg .beat { color: var(--danger); }
+  .windpick { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 6px 0 10px; flex-wrap: wrap; }
+  .windpick input[type=range] { flex: 1; min-width: 120px; }
+  .drill { margin-bottom: 12px; }
+  .drill ol { padding-left: 20px; margin: 6px 0; }
+  .drill li { margin: 4px 0; }
+  .drill .src { font-size: 11px; color: var(--muted); }
+  .rating button { width: 40px; height: 36px; }
+  .rating button.on { background: var(--accent); color: #1a1a1a; }
   .depth-label { background: none; border: 0; box-shadow: none; color: #fff; font-size: 11px; font-weight: 600; text-shadow: 0 0 3px #000, 0 0 3px #000; white-space: nowrap; }
 
   /* panels */
@@ -146,6 +167,11 @@
         <button id="btn-zin" title="Zoom in">+</button>
         <button id="btn-zout" title="Zoom out">&minus;</button>
       </div>
+      <div id="planbar" class="hidden">
+        <div class="small"><b>Planning a route.</b> Tap the water in order. Taps near a place or mark snap to it.</div>
+        <div class="small muted" id="plan-count">0 waypoints</div>
+        <div class="toolbar" style="margin:8px 0 0"><button class="btn sm" id="plan-undo">Undo</button><button class="btn sm primary" id="plan-done">Done</button><button class="btn sm" id="plan-cancel">Cancel</button></div>
+      </div>
       <div id="nudge" class="hidden">
         <div class="nudge-title">Nudge <b id="nudge-name"></b> <span class="small muted">(2 m per tap, or drag the pin)</span></div>
         <div class="nudge-grid">
@@ -173,15 +199,29 @@
 
     <section class="view" id="view-marks">
       <div class="panel">
-        <h2>Marks and tracks</h2>
+        <h2>Marks and sails</h2>
+        <div class="small" id="syncstatus"></div>
         <div class="toolbar">
           <button class="btn sm" id="btn-share-marks">Share marks</button>
           <label class="btn sm">Import marks<input type="file" id="file-marks" accept=".json,application/json"></label>
         </div>
         <div class="card" id="marks-list"><span class="muted">No marks yet. On the map, tap the pin button or press and hold on the water.</span></div>
-        <h3>Saved tracks</h3>
-        <div class="card" id="tracks-list"><span class="muted">No tracks yet. Tap the record button on the map to start one.</span></div>
-        <p class="small muted">Marks and tracks are stored on this phone only. Use Share marks to send a file to another phone, then Import it there.</p>
+        <h3>Sails</h3>
+        <div class="card" id="tracks-list"><span class="muted">No sails yet. Tap the record button on the map to start one.</span></div>
+        <p class="small muted">Marks and sails are kept on this phone and, once you sign in on the Info tab, in the shared crew list that both phones see. Share and Import are still here as a file backup.</p>
+      </div>
+    </section>
+
+    <section class="view" id="view-plan">
+      <div class="panel">
+        <h2>Routes</h2>
+        <div class="toolbar"><button class="btn sm primary" id="btn-plan">Plan a route on the map</button></div>
+        <div class="card" id="routes-list"><span class="muted">No routes yet.</span></div>
+        <p class="small muted">A route is a chain of waypoints. The app reads each leg against the wind and tells you the point of sail and tack, so the same route reads differently on different days. Add your own notes per leg for the things a formula cannot know. Named places (marina, points) come from the Log tab: drop a mark and tick Named place.</p>
+        <h2 style="margin-top:22px">Drills</h2>
+        <div id="drills"></div>
+        <h3>Practice log</h3>
+        <div class="card" id="drilllog"><span class="muted">Nothing logged yet.</span></div>
       </div>
     </section>
 
@@ -203,6 +243,14 @@
           <p><b>Buen Camino draws 2.5 ft</b> (wing keel). The <span style="color:#ff5a5a;font-weight:600">3 ft line</span> is drawn in red: inside it you have about 6 inches under the keel at survey pool, and less if the lake is down. The <span style="color:#ff9f40;font-weight:600">6 ft line</span> is orange.</p>
           <p>Contours load from the Game and Parks service when online and are cached on this phone so the map still works with weak signal. Basemap tiles need signal unless recently viewed.</p>
         </div>
+        <h3>Crew sign in</h3>
+        <div class="card">
+          <p class="small muted">Sign in once per phone. Marks and sails then sync to the shared list, so both of you see the same things and nothing is lost if the app is reinstalled.</p>
+          <label class="small muted">Your name<input type="text" id="crew-name" placeholder="Chad or Kimberley" autocomplete="off"></label>
+          <label class="small muted" style="display:block;margin-top:8px">Crew passphrase<input type="text" id="crew-key" placeholder="passphrase" autocomplete="off" autocapitalize="none"></label>
+          <div class="toolbar" style="margin-top:10px"><button class="btn primary" id="crew-save">Sign in and sync</button><button class="btn" id="crew-signout">Sign out</button></div>
+          <div class="small muted" id="crewstatus"></div>
+        </div>
         <h3>GPS and screen</h3>
         <div class="card">
           <p>Recording a track asks the phone to keep the screen on (a wake lock). Tracking pauses if you switch apps or lock the phone; it resumes when you come back. Keep the phone mounted with this page open while underway.</p>
@@ -220,14 +268,19 @@
       <label>Mark name<input type="text" id="sheet-name" placeholder="for example: shoal, anchorage, the good cove"></label>
       <label>Note<input type="text" id="sheet-note" placeholder="optional, short"></label>
       <label>Story<textarea id="sheet-story" placeholder="optional, as long as you like"></textarea></label>
+      <label class="chk-row" id="sheet-place-row"><input type="checkbox" id="sheet-place"> Named place (marina, point, cove). Shows its name on the map and can be used in routes.</label>
       <div class="small muted" id="sheet-coords"></div>
       <div class="toolbar"><button class="btn primary" id="sheet-save">Save</button><button class="btn" id="sheet-cancel">Cancel</button></div>
     </div>
   </div>
+  <div id="rsheet" class="hidden">
+    <div class="sheet-box" id="rsheet-box"></div>
+  </div>
   <nav>
     <button data-view="map" class="active"><svg viewBox="0 0 24 24"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg>Map</button>
     <button data-view="wind"><svg viewBox="0 0 24 24"><path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 12h15a3 3 0 1 1-3 3"/><path d="M3 16h8a2 2 0 1 1-2 2"/></svg>Wind</button>
-    <button data-view="marks"><svg viewBox="0 0 24 24"><path d="M12 22s7-7 7-12a7 7 0 0 0-14 0c0 5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>Marks</button>
+    <button data-view="marks"><svg viewBox="0 0 24 24"><path d="M12 22s7-7 7-12a7 7 0 0 0-14 0c0 5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>Log</button>
+    <button data-view="plan"><svg viewBox="0 0 24 24"><path d="M4 19l5-11 5 6 6-9"/><circle cx="4" cy="19" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="14" cy="14" r="1.5"/><circle cx="20" cy="5" r="1.5"/></svg>Plan</button>
     <button data-view="lists"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>Lists</button>
     <button data-view="info"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>Info</button>
   </nav>
@@ -262,6 +315,7 @@
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + b.dataset.view));
     if (b.dataset.view === 'map') setTimeout(() => { map.invalidateSize(); startWind(); }, 50); else stopWind();
     if (b.dataset.view === 'marks') renderMarks();
+    if (b.dataset.view === 'plan') renderPlan();
   }));
 
   /* ---------- Map ---------- */
@@ -393,19 +447,29 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { if (recording && !wakeLock) requestWake(); if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; startGps(); } } });
 
   function saveCurrentTrack() { store.set('track_current', { started: track[0] ? track[0].t : Date.now(), pts: track }); }
+  const newId = () => Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+  const touch = (o) => { o.updated = Date.now(); o.dirty = true; return o; };
+
+  /* ---------- Sails (tracks) ---------- */
+  let sails = (store.get('tracks', []) || []).map(t => ({ ...t, id: String(t.id), name: t.name || '', story: t.story || '', updated: t.updated || t.ended || Date.now(), deleted: !!t.deleted, by: t.by || '' }));
+  function saveSails() { store.set('tracks', sails); }
+  function finishSail(pts, recovered) {
+    const s = touch({ id: newId(), name: '', story: '', started: pts[0].t, ended: pts[pts.length - 1].t, pts, deleted: false, by: crewName(), recovered: !!recovered });
+    sails.unshift(s); saveSails(); syncSoon(); return s;
+  }
   $('#btn-track').addEventListener('click', async () => {
     if (!recording) {
       recording = true; track = []; trackLine = L.polyline([], { color: '#ffcc4d', weight: 3, opacity: .9 }).addTo(map);
-      $('#btn-track').classList.add('on'); startGps(); await requestWake(); toast('Recording track. Screen will stay on.');
+      $('#btn-track').classList.add('on'); startGps(); await requestWake(); toast('Recording sail. Screen will stay on.');
     } else {
       recording = false; $('#btn-track').classList.remove('on');
       if (wakeLock) { wakeLock.release(); wakeLock = null; }
-      if (track.length > 1) { const tracks = store.get('tracks', []); tracks.unshift({ id: Date.now(), started: track[0].t, ended: track[track.length - 1].t, pts: track }); store.set('tracks', tracks.slice(0, 30)); toast('Track saved (' + track.length + ' points)'); }
-      else toast('Track too short to save');
+      if (track.length > 1) { const s = finishSail(track); toast('Sail saved (' + track.length + ' points)'); setTimeout(() => openSheet(s, false, 'sail'), 400); }
+      else toast('Sail too short to save');
       localStorage.removeItem('track_current'); track = []; $('#hud-sub').textContent = lastPos ? `±${Math.round(lastPos.acc)} m` : 'GPS on';
     }
   });
-  (function recoverTrack() { const cur = store.get('track_current', null); if (cur && cur.pts && cur.pts.length > 1) { const tracks = store.get('tracks', []); tracks.unshift({ id: cur.started, started: cur.started, ended: cur.pts[cur.pts.length - 1].t, pts: cur.pts, recovered: true }); store.set('tracks', tracks.slice(0, 30)); localStorage.removeItem('track_current'); } })();
+  function recoverTrack() { const cur = store.get('track_current', null); if (cur && cur.pts && cur.pts.length > 1) { finishSail(cur.pts, true); localStorage.removeItem('track_current'); } }
 
   function trackStats(t) {
     let dist = 0; for (let i = 1; i < t.pts.length; i++) dist += map.distance([t.pts[i - 1].lat, t.pts[i - 1].lon], [t.pts[i].lat, t.pts[i].lon]);
@@ -414,7 +478,7 @@
   }
   function gpx(t) {
     const pts = t.pts.map(p => `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${new Date(p.t).toISOString()}</time></trkpt>`).join('\n');
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Branched Oak Sailing" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Buen Camino ${new Date(t.started).toLocaleDateString()}</name><trkseg>\n${pts}\n</trkseg></trk></gpx>`;
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Branched Oak Sailing" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>${esc(t.name || 'Buen Camino ' + new Date(t.started).toLocaleDateString())}</name><trkseg>\n${pts}\n</trkseg></trk></gpx>`;
   }
   async function shareFile(name, text, type) {
     const file = new File([text], name, { type });
@@ -423,61 +487,74 @@
   }
   let shownTrack = null;
   function renderTracks() {
-    const tracks = store.get('tracks', []); const el = $('#tracks-list');
-    if (!tracks.length) { el.innerHTML = '<span class="muted">No tracks yet. Tap the record button on the map to start one.</span>'; return; }
-    el.innerHTML = tracks.map(t => { const s = trackStats(t); return `<div class="markitem"><div class="name">${new Date(t.started).toLocaleDateString()} ${fmtTime(new Date(t.started))} to ${fmtTime(new Date(t.ended))}${t.recovered ? ' <span class="warn small">(recovered)</span>' : ''}</div><div class="note">${s.nm.toFixed(2)} nm · ${(s.hrs * 60).toFixed(0)} min · avg ${s.avg.toFixed(1)} kn · ${t.pts.length} points</div>
-      <div class="toolbar"><button class="btn sm" data-show="${t.id}">Show on map</button><button class="btn sm" data-gpx="${t.id}">Share GPX</button><button class="btn sm danger" data-del="${t.id}">Delete</button></div></div>`; }).join('');
-    el.querySelectorAll('[data-show]').forEach(b => b.addEventListener('click', () => { const t = tracks.find(x => x.id == b.dataset.show); if (shownTrack) map.removeLayer(shownTrack); shownTrack = L.polyline(t.pts.map(p => [p.lat, p.lon]), { color: '#5fd38d', weight: 3 }).addTo(map); map.fitBounds(shownTrack.getBounds(), { padding: [30, 30] }); followMe = false; document.querySelector('nav button[data-view=map]').click(); }));
-    el.querySelectorAll('[data-gpx]').forEach(b => b.addEventListener('click', () => { const t = tracks.find(x => x.id == b.dataset.gpx); shareFile('buen-camino-' + new Date(t.started).toISOString().slice(0, 10) + '.gpx', gpx(t), 'application/gpx+xml'); }));
-    el.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { if (confirm('Delete this track?')) { store.set('tracks', tracks.filter(x => x.id != b.dataset.del)); renderTracks(); } }));
+    const live = sails.filter(t => !t.deleted).sort((a, b) => b.started - a.started); const el = $('#tracks-list');
+    if (!live.length) { el.innerHTML = '<span class="muted">No sails yet. Tap the record button on the map to start one.</span>'; return; }
+    el.innerHTML = live.map(t => { const s = trackStats(t); return `<div class="markitem"><div class="name">${t.name ? esc(t.name) : new Date(t.started).toLocaleDateString()}${t.recovered ? ' <span class="warn small">(recovered)</span>' : ''}</div><div class="note">${new Date(t.started).toLocaleDateString()} ${fmtTime(new Date(t.started))} to ${fmtTime(new Date(t.ended))} · ${s.nm.toFixed(2)} nm · ${(s.hrs * 60).toFixed(0)} min · avg ${s.avg.toFixed(1)} kn${t.by ? ' · ' + esc(t.by) : ''}</div>${t.story ? `<div class="story clamp" data-story="s${t.id}">${esc(t.story)}</div><button class="linkbtn" data-more="s${t.id}">Read more</button>` : ''}
+      <div class="toolbar"><button class="btn sm" data-show="${t.id}">Show on map</button><button class="btn sm" data-sedit="${t.id}">Edit</button><button class="btn sm" data-gpx="${t.id}">Share GPX</button><button class="btn sm danger" data-del="${t.id}">Delete</button></div></div>`; }).join('');
+    el.querySelectorAll('[data-show]').forEach(b => b.addEventListener('click', () => { const t = sails.find(x => x.id == b.dataset.show); if (shownTrack) map.removeLayer(shownTrack); shownTrack = L.polyline(t.pts.map(p => [p.lat, p.lon]), { color: '#5fd38d', weight: 3 }).addTo(map); map.fitBounds(shownTrack.getBounds(), { padding: [30, 30] }); followMe = false; document.querySelector('nav button[data-view=map]').click(); }));
+    el.querySelectorAll('[data-sedit]').forEach(b => b.addEventListener('click', () => openSheet(sails.find(x => x.id == b.dataset.sedit), false, 'sail')));
+    el.querySelectorAll('[data-gpx]').forEach(b => b.addEventListener('click', () => { const t = sails.find(x => x.id == b.dataset.gpx); shareFile('buen-camino-' + new Date(t.started).toISOString().slice(0, 10) + '.gpx', gpx(t), 'application/gpx+xml'); }));
+    el.querySelectorAll('[data-more]').forEach(b => b.addEventListener('click', () => { const s = el.querySelector(`[data-story="${b.dataset.more}"]`); s.classList.toggle('clamp'); b.textContent = s.classList.contains('clamp') ? 'Read more' : 'Show less'; }));
+    el.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { if (confirm('Delete this sail?')) { const t = sails.find(x => x.id == b.dataset.del); t.deleted = true; touch(t); saveSails(); renderTracks(); syncSoon(); } }));
   }
 
   /* ---------- Marks ---------- */
-  let marks = store.get('marks', []); const markLayer = L.layerGroup().addTo(map); const markObjs = {};
+  let marks = (store.get('marks', []) || []).map(m => ({ ...m, id: String(m.id), kind: m.kind || 'mark', updated: m.updated || m.at || Date.now(), deleted: !!m.deleted, by: m.by || '' }));
+  const places = () => marks.filter(m => !m.deleted && m.kind === 'place');
+  const markLayer = L.layerGroup().addTo(map); const markObjs = {};
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const liveMarks = () => marks.filter(m => !m.deleted);
   function saveMarks() { store.set('marks', marks); drawMarks(); }
+  function deleteMark(m) { m.deleted = true; touch(m); saveMarks(); renderMarks(); syncSoon(); }
   function drawMarks() {
     markLayer.clearLayers();
-    marks.forEach(m => {
-      const mk = L.marker([m.lat, m.lon], { icon: L.divIcon({ className: '', html: '<div class="mark-pin"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }) }).addTo(markLayer);
+    liveMarks().forEach(m => {
+      const icon = m.kind === 'place' ? L.divIcon({ className: '', html: `<div class="place-pin"><span>${esc(m.name)}</span></div>`, iconSize: [12, 12], iconAnchor: [6, 6] }) : L.divIcon({ className: '', html: '<div class="mark-pin"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
+      const mk = L.marker([m.lat, m.lon], { icon }).addTo(markLayer);
       markObjs[m.id] = mk;
       mk.bindPopup(() => {
         const d = document.createElement('div');
         const story = m.story ? `<div class="small" style="margin-top:4px;max-height:5em;overflow:hidden">${esc(m.story).slice(0, 220)}${m.story.length > 220 ? '…' : ''}</div>` : '';
-        d.innerHTML = `<b>${esc(m.name)}</b>${m.note ? `<br><span class="small muted">${esc(m.note)}</span>` : ''}${story}<br><button class="btn sm">Edit</button><button class="btn sm">Nudge</button><button class="btn sm danger">Delete</button>`;
+        d.innerHTML = `<b>${esc(m.name)}</b>${m.note ? `<br><span class="small muted">${esc(m.note)}</span>` : ''}${story}${m.by ? `<div class="small muted">${esc(m.by)}</div>` : ''}<br><button class="btn sm">Edit</button><button class="btn sm">Nudge</button><button class="btn sm danger">Delete</button>`;
         const [bEdit, bNudge, bDel] = d.querySelectorAll('button');
         bEdit.addEventListener('click', () => { mk.closePopup(); openSheet(m); });
         bNudge.addEventListener('click', () => { mk.closePopup(); startNudge(m); });
-        bDel.addEventListener('click', () => { if (confirm('Delete "' + m.name + '"?')) { marks = marks.filter(x => x.id !== m.id); saveMarks(); renderMarks(); } });
+        bDel.addEventListener('click', () => { if (confirm('Delete "' + m.name + '"?')) deleteMark(m); });
         return d; });
       mk.on('dragend', () => { if (nudging && nudging.id === m.id) { const ll = mk.getLatLng(); nudging.lat = +ll.lat.toFixed(6); nudging.lon = +ll.lng.toFixed(6); } });
     });
   }
 
-  // Edit sheet (name, note, story)
+  // Edit sheet (name, note, story) for marks and sails
   let sheetTarget = null;
-  function openSheet(m, isNew) {
-    sheetTarget = { m, isNew: !!isNew };
-    $('#sheet-title').textContent = isNew ? 'New mark' : 'Edit mark';
+  function openSheet(m, isNew, kind) {
+    kind = kind || 'mark'; sheetTarget = { m, isNew: !!isNew, kind };
+    $('#sheet-title').textContent = kind === 'sail' ? 'Name this sail' : kind === 'route' ? (isNew ? 'Name this route' : 'Edit route') : (isNew ? 'New mark' : 'Edit mark');
     $('#sheet-name').value = m.name || ''; $('#sheet-note').value = m.note || ''; $('#sheet-story').value = m.story || '';
-    $('#sheet-coords').textContent = m.lat.toFixed(5) + ', ' + m.lon.toFixed(5);
+    $('#sheet-note').parentElement.classList.toggle('hidden', kind !== 'mark');
+    $('#sheet-place-row').classList.toggle('hidden', kind !== 'mark'); $('#sheet-place').checked = m.kind === 'place';
+    $('#sheet-name').placeholder = kind === 'sail' ? 'for example: first shakedown, sunset with Kimberley' : kind === 'route' ? 'for example: dam run and south arm' : 'for example: shoal, anchorage, the good cove';
+    $('#sheet-coords').textContent = kind === 'sail' ? new Date(m.started).toLocaleString() : kind === 'route' ? m.wps.length + ' waypoints' : m.lat.toFixed(5) + ', ' + m.lon.toFixed(5);
     $('#sheet').classList.remove('hidden'); setTimeout(() => $('#sheet-name').focus(), 50);
   }
   function closeSheet() { $('#sheet').classList.add('hidden'); sheetTarget = null; }
   $('#sheet-cancel').addEventListener('click', closeSheet);
   $('#sheet').addEventListener('click', e => { if (e.target === $('#sheet')) closeSheet(); });
   $('#sheet-save').addEventListener('click', () => {
-    if (!sheetTarget) return; const { m, isNew } = sheetTarget;
-    const name = $('#sheet-name').value.trim(); if (!name) { $('#sheet-name').focus(); return; }
-    m.name = name; m.note = $('#sheet-note').value.trim(); m.story = $('#sheet-story').value.trim();
+    if (!sheetTarget) return; const { m, isNew, kind } = sheetTarget;
+    const name = $('#sheet-name').value.trim();
+    if (kind === 'sail') { m.name = name; m.story = $('#sheet-story').value.trim(); touch(m); saveSails(); renderTracks(); closeSheet(); syncSoon(); toast('Sail updated'); return; }
+    if (kind === 'route') { m.name = name || 'Route'; m.story = $('#sheet-story').value.trim(); touch(m); saveRoutes(); closeSheet(); syncSoon(); toast('Route saved'); if ($('#view-plan').classList.contains('active')) renderPlan(); return; }
+    if (!name) { $('#sheet-name').focus(); return; }
+    m.name = name; m.note = $('#sheet-note').value.trim(); m.story = $('#sheet-story').value.trim(); m.kind = $('#sheet-place').checked ? 'place' : 'mark'; touch(m);
     if (isNew) marks.unshift(m);
-    saveMarks(); renderMarks(); closeSheet(); toast(isNew ? 'Mark saved' : 'Mark updated');
+    saveMarks(); renderMarks(); closeSheet(); syncSoon(); toast(isNew ? 'Mark saved' : 'Mark updated');
   });
-  function addMark(lat, lon) { openSheet({ id: Date.now(), name: '', note: '', story: '', lat: +lat.toFixed(6), lon: +lon.toFixed(6), at: Date.now() }, true); }
+  function addMark(lat, lon) { openSheet({ id: newId(), name: '', note: '', story: '', kind: 'mark', lat: +lat.toFixed(6), lon: +lon.toFixed(6), at: Date.now(), deleted: false, by: crewName() }, true); }
   $('#btn-mark').addEventListener('click', () => { const c = lastPos && (Date.now() - lastPos.t < 30000) ? lastPos : null; const ll = c ? { lat: c.lat, lng: c.lon } : map.getCenter(); if (!c) toast('No fresh GPS fix, marking map center'); addMark(ll.lat, ll.lng); });
   // press and hold to add a mark
   let pressTimer = null;
-  map.on('mousedown touchstart', e => { if (nudging) return; const ll = e.latlng; pressTimer = setTimeout(() => { addMark(ll.lat, ll.lng); }, 700); });
+  map.on('mousedown touchstart', e => { if (nudging || planning) return; const ll = e.latlng; pressTimer = setTimeout(() => { addMark(ll.lat, ll.lng); }, 700); });
   ['mouseup', 'touchend', 'dragstart', 'move', 'zoomstart'].forEach(ev => map.on(ev, () => clearTimeout(pressTimer)));
 
   // Nudge: arrow buttons move 2 m; the pin is also draggable while nudging
@@ -491,9 +568,9 @@
   function endNudge(keep) {
     if (!nudging) return;
     const mk = markObjs[nudging.id]; if (mk && mk.dragging) mk.dragging.disable();
-    if (!keep) { nudging.lat = nudgeOrig.lat; nudging.lon = nudgeOrig.lon; }
+    if (!keep) { nudging.lat = nudgeOrig.lat; nudging.lon = nudgeOrig.lon; } else touch(nudging);
     nudging = null; $('#nudge').classList.add('hidden'); $('#hud').classList.remove('hidden');
-    saveMarks(); renderMarks(); if (keep) toast('Position updated');
+    saveMarks(); renderMarks(); if (keep) { syncSoon(); toast('Position updated'); }
   }
   $('#nudge').querySelectorAll('button[data-n]').forEach(b => b.addEventListener('click', () => {
     if (!nudging) return; const [dx, dy] = b.dataset.n.split(',').map(Number); const step = 2; // metres
@@ -505,26 +582,250 @@
   $('#nudge-cancel').addEventListener('click', () => endNudge(false));
 
   function renderMarks() {
-    renderTracks(); const el = $('#marks-list');
-    if (!marks.length) { el.innerHTML = '<span class="muted">No marks yet. On the map, tap the pin button or press and hold on the water.</span>'; return; }
-    el.innerHTML = marks.map(m => `<div class="markitem"><div class="name">${esc(m.name)}</div>${m.note ? `<div class="note">${esc(m.note)}</div>` : ''}${m.story ? `<div class="story clamp" data-story="${m.id}">${esc(m.story)}</div><button class="linkbtn" data-more="${m.id}">Read more</button>` : ''}<div class="small muted">${m.lat.toFixed(5)}, ${m.lon.toFixed(5)} · ${new Date(m.at).toLocaleDateString()}</div>
+    renderTracks(); renderSyncStatus(); const el = $('#marks-list'); const live = liveMarks();
+    if (!live.length) { el.innerHTML = '<span class="muted">No marks yet. On the map, tap the pin button or press and hold on the water.</span>'; return; }
+    el.innerHTML = live.map(m => `<div class="markitem"><div class="name">${esc(m.name)}${m.kind === 'place' ? ' <span class="small muted">place</span>' : ''}</div>${m.note ? `<div class="note">${esc(m.note)}</div>` : ''}${m.story ? `<div class="story clamp" data-story="${m.id}">${esc(m.story)}</div><button class="linkbtn" data-more="${m.id}">Read more</button>` : ''}<div class="small muted">${m.lat.toFixed(5)}, ${m.lon.toFixed(5)} · ${new Date(m.at).toLocaleDateString()}${m.by ? ' · ' + esc(m.by) : ''}</div>
       <div class="toolbar"><button class="btn sm" data-go="${m.id}">Show</button><button class="btn sm" data-edit="${m.id}">Edit</button><button class="btn sm" data-nudge="${m.id}">Nudge</button><button class="btn sm danger" data-del="${m.id}">Delete</button></div></div>`).join('');
     const goMap = () => document.querySelector('nav button[data-view=map]').click();
     el.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => { const m = marks.find(x => x.id == b.dataset.go); followMe = false; map.setView([m.lat, m.lon], 16); goMap(); }));
     el.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => openSheet(marks.find(x => x.id == b.dataset.edit))));
     el.querySelectorAll('[data-nudge]').forEach(b => b.addEventListener('click', () => { goMap(); setTimeout(() => startNudge(marks.find(x => x.id == b.dataset.nudge)), 100); }));
     el.querySelectorAll('[data-more]').forEach(b => b.addEventListener('click', () => { const s = el.querySelector(`[data-story="${b.dataset.more}"]`); s.classList.toggle('clamp'); b.textContent = s.classList.contains('clamp') ? 'Read more' : 'Show less'; }));
-    el.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { const m = marks.find(x => x.id == b.dataset.del); if (confirm('Delete "' + m.name + '"?')) { marks = marks.filter(x => x.id !== m.id); saveMarks(); renderMarks(); } }));
+    el.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { const m = marks.find(x => x.id == b.dataset.del); if (confirm('Delete "' + m.name + '"?')) deleteMark(m); }));
   }
-  $('#btn-share-marks').addEventListener('click', () => shareFile('branched-oak-marks.json', JSON.stringify({ type: 'branched-oak-marks', marks }, null, 1), 'application/json'));
+  $('#btn-share-marks').addEventListener('click', () => shareFile('branched-oak-marks.json', JSON.stringify({ type: 'branched-oak-marks', marks: liveMarks() }, null, 1), 'application/json'));
   $('#file-marks').addEventListener('change', async e => {
     const f = e.target.files[0]; if (!f) return;
     try { const j = JSON.parse(await f.text()); const inc = j.marks || j; if (!Array.isArray(inc)) throw 0; let n = 0;
-      inc.forEach(m => { if (typeof m.lat === 'number' && typeof m.lon === 'number' && m.name && !marks.some(x => x.id === m.id)) { marks.push({ id: m.id || Date.now() + n, name: String(m.name), note: String(m.note || ''), story: String(m.story || ''), lat: m.lat, lon: m.lon, at: m.at || Date.now() }); n++; } });
-      saveMarks(); renderMarks(); toast(n + ' marks imported'); } catch (err) { toast('That file did not look like a marks file'); }
+      inc.forEach(m => { if (typeof m.lat === 'number' && typeof m.lon === 'number' && m.name && !marks.some(x => x.id === String(m.id))) { marks.push(touch({ id: String(m.id || newId()), name: String(m.name), note: String(m.note || ''), story: String(m.story || ''), kind: m.kind === 'place' ? 'place' : 'mark', lat: m.lat, lon: m.lon, at: m.at || Date.now(), deleted: false, by: m.by || '' })); n++; } });
+      saveMarks(); renderMarks(); syncSoon(); toast(n + ' marks imported'); } catch (err) { toast('That file did not look like a marks file'); }
     e.target.value = '';
   });
   drawMarks();
+
+  /* ---------- Routes ---------- */
+  let routes = (store.get('routes', []) || []); const saveRoutes = () => store.set('routes', routes);
+  const liveRoutes = () => routes.filter(r => !r.deleted);
+  const toRad = d => d * Math.PI / 180, toDeg = r => r * 180 / Math.PI;
+  function bearing(a, b) { const φ1 = toRad(a.lat), φ2 = toRad(b.lat), Δλ = toRad(b.lon - a.lon); const y = Math.sin(Δλ) * Math.cos(φ2), x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ); return (toDeg(Math.atan2(y, x)) + 360) % 360; }
+  const distNm = (a, b) => map.distance([a.lat, a.lon], [b.lat, b.lon]) / 1852;
+  // Points of sail by angle off the wind, from the ASA 101 cheat sheet: close hauled about 45, close reach 60 to 70, beam 90, broad about 135, run 180
+  function pointOfSail(angle) {
+    if (angle < 38) return { pos: 'too close to the wind', beat: true };
+    if (angle < 55) return { pos: 'close hauled' };
+    if (angle < 78) return { pos: 'close reach' };
+    if (angle < 105) return { pos: 'beam reach' };
+    if (angle < 160) return { pos: 'broad reach' };
+    return { pos: 'run', run: true };
+  }
+  function readRoute(r, windFrom) {
+    const legs = [];
+    for (let i = 0; i < r.wps.length - 1; i++) {
+      const a = r.wps[i], b = r.wps[i + 1]; const brg = bearing(a, b); const nm = distNm(a, b);
+      let rel = ((windFrom - brg) % 360 + 360) % 360; // where the wind sits relative to the bow: 0 = dead ahead, 90 = over the starboard side
+      const angle = rel > 180 ? 360 - rel : rel; const tack = rel > 0 && rel < 180 ? 'starboard' : 'port';
+      const ps = pointOfSail(angle); legs.push({ i, from: a, to: b, brg, nm, angle, tack, ...ps, note: a.legNote || '' });
+    }
+    legs.forEach((l, i) => { if (i === 0) return; const p = legs[i - 1]; if (l.beat) l.turn = ''; else if (p.tack !== l.tack) l.turn = (p.angle + l.angle) / 2 > 90 ? 'Jibe' : 'Tack'; else l.turn = Math.abs(l.angle - p.angle) < 8 ? '' : (l.angle < p.angle ? 'Head up' : 'Bear away'); });
+    return legs;
+  }
+  function narrative(r, windFrom, windKn) {
+    const legs = readRoute(r, windFrom); const total = legs.reduce((a, l) => a + l.nm, 0);
+    const line = l => `Leg ${l.i + 1}, ${esc(l.from.name || 'waypoint ' + (l.i + 1))} to ${esc(l.to.name || 'waypoint ' + (l.i + 2))}, ${l.nm.toFixed(2)} nm heading ${Math.round(l.brg).toString().padStart(3, '0')}: ` + (l.beat ? `<span class="beat">into the wind, beat up in a series of tacks</span>` : `<span class="pos">${l.tack} tack ${l.pos}</span>`) + (l.run ? ' <span class="small muted">(dead run, watch the boom; a pair of broad reaches is safer)</span>' : '');
+    return { legs, total, html: `<div class="small muted">${legs.length} legs, ${total.toFixed(2)} nm, read against wind from ${compass(windFrom)} (${Math.round(windFrom)}°)${windKn != null ? ' at ' + Math.round(windKn) + ' kn' : ''}</div>` + legs.map(l => `<div class="leg">${l.turn ? `<div class="turn">${l.turn === 'Tack' || l.turn === 'Jibe' ? l.turn + ' to ' + l.tack : l.turn}</div>` : ''}<div>${line(l)}</div>${l.note ? `<div class="small muted">Note: ${esc(l.note)}</div>` : ''}</div>`).join('') + (r.story ? `<div class="story" style="margin-top:8px">${esc(r.story)}</div>` : '') };
+  }
+  let routeLayer = L.layerGroup().addTo(map), shownRoute = null;
+  function showRoute(r) {
+    routeLayer.clearLayers(); shownRoute = r; if (!r) return;
+    const ll = r.wps.map(w => [w.lat, w.lon]);
+    const line = L.polyline(ll, { color: '#5fd38d', weight: 4, opacity: .9 }).addTo(routeLayer);
+    line.on('click', () => openRouteSheet(r));
+    r.wps.forEach((w, i) => L.marker([w.lat, w.lon], { icon: L.divIcon({ className: '', html: `<div class="wp-num">${i + 1}</div>`, iconSize: [20, 20], iconAnchor: [10, 10] }) }).addTo(routeLayer).on('click', () => openRouteSheet(r)));
+    for (let i = 0; i < r.wps.length - 1; i++) { const a = r.wps[i], b = r.wps[i + 1]; const mid = [(a.lat + b.lat) / 2, (a.lon + b.lon) / 2]; L.marker(mid, { icon: L.divIcon({ className: '', html: `<div class="leg-arrow" style="transform:rotate(${bearing(a, b)}deg)"></div>`, iconSize: [12, 14], iconAnchor: [6, 7] }), interactive: false }).addTo(routeLayer); }
+    map.fitBounds(line.getBounds(), { padding: [40, 40] }); followMe = false;
+  }
+  function liveWind() { return wx && wx.current ? { from: wx.current.wind_direction_10m, kn: wx.current.wind_speed_10m } : { from: 180, kn: null }; }
+  function openRouteSheet(r) {
+    const w = liveWind(); let from = w.from, kn = w.kn;
+    const box = $('#rsheet-box');
+    const render = () => {
+      const n = narrative(r, from, kn);
+      box.innerHTML = `<h2>${esc(r.name || 'Route')}</h2>
+        <div class="windpick"><span>Wind from</span><input type="range" id="wp-dir" min="0" max="359" value="${Math.round(from)}"><b id="wp-lbl">${compass(from)} ${Math.round(from)}°</b><button class="btn sm" id="wp-live">Live</button></div>
+        <div id="wp-narr">${n.html}</div>
+        <div class="toolbar" style="margin-top:12px"><button class="btn sm" id="rs-show">Show on map</button><button class="btn sm" id="rs-edit">Edit name and story</button><button class="btn sm" id="rs-notes">Leg notes</button><button class="btn sm danger" id="rs-del">Delete</button><button class="btn sm" id="rs-close">Close</button></div>`;
+      const slider = box.querySelector('#wp-dir');
+      slider.addEventListener('input', () => { from = +slider.value; kn = null; box.querySelector('#wp-lbl').textContent = compass(from) + ' ' + from + '°'; box.querySelector('#wp-narr').innerHTML = narrative(r, from, kn).html; });
+      box.querySelector('#wp-live').addEventListener('click', () => { const lw = liveWind(); from = lw.from; kn = lw.kn; render(); });
+      box.querySelector('#rs-show').addEventListener('click', () => { closeRouteSheet(); showRoute(r); document.querySelector('nav button[data-view=map]').click(); });
+      box.querySelector('#rs-edit').addEventListener('click', () => { closeRouteSheet(); openSheet(r, false, 'route'); });
+      box.querySelector('#rs-notes').addEventListener('click', () => editLegNotes(r));
+      box.querySelector('#rs-del').addEventListener('click', () => { if (confirm('Delete route "' + r.name + '"?')) { r.deleted = true; touch(r); saveRoutes(); if (shownRoute && shownRoute.id === r.id) showRoute(null); closeRouteSheet(); renderPlan(); syncSoon(); } });
+      box.querySelector('#rs-close').addEventListener('click', closeRouteSheet);
+    };
+    render(); $('#rsheet').classList.remove('hidden');
+  }
+  function closeRouteSheet() { $('#rsheet').classList.add('hidden'); }
+  $('#rsheet').addEventListener('click', e => { if (e.target === $('#rsheet')) closeRouteSheet(); });
+  function editLegNotes(r) {
+    const box = $('#rsheet-box');
+    box.innerHTML = `<h2>Leg notes: ${esc(r.name || 'Route')}</h2><div class="small muted">A note is attached to the leg that starts at each waypoint.</div>` +
+      r.wps.slice(0, -1).map((w, i) => `<label style="display:block;margin-top:10px;font-size:12px;color:var(--muted)">Leg ${i + 1}: ${esc(w.name || 'waypoint ' + (i + 1))} to ${esc(r.wps[i + 1].name || 'waypoint ' + (i + 2))}<input type="text" data-leg="${i}" value="${esc(w.legNote || '')}" placeholder="for example: stay outside the red line"></label>`).join('') +
+      `<div class="toolbar" style="margin-top:12px"><button class="btn primary" id="ln-save">Save</button><button class="btn" id="ln-cancel">Cancel</button></div>`;
+    box.querySelector('#ln-save').addEventListener('click', () => { box.querySelectorAll('[data-leg]').forEach(inp => { r.wps[+inp.dataset.leg].legNote = inp.value.trim(); }); touch(r); saveRoutes(); syncSoon(); openRouteSheet(r); });
+    box.querySelector('#ln-cancel').addEventListener('click', () => openRouteSheet(r));
+  }
+  // Plan mode: tap waypoints on the map
+  let planning = false, planWps = [], planLayer = L.layerGroup().addTo(map);
+  function drawPlan() {
+    planLayer.clearLayers(); if (planWps.length > 1) L.polyline(planWps.map(w => [w.lat, w.lon]), { color: '#5fd38d', weight: 3, dashArray: '6 6' }).addTo(planLayer);
+    planWps.forEach((w, i) => L.marker([w.lat, w.lon], { icon: L.divIcon({ className: '', html: `<div class="wp-num">${i + 1}</div>`, iconSize: [20, 20], iconAnchor: [10, 10] }), interactive: false }).addTo(planLayer));
+    $('#plan-count').textContent = planWps.length + ' waypoint' + (planWps.length === 1 ? '' : 's') + (planWps.length ? ', last: ' + (planWps[planWps.length - 1].name || 'open water') : '');
+  }
+  function startPlan() { planning = true; planWps = []; drawPlan(); $('#planbar').classList.remove('hidden'); $('#hud').classList.add('hidden'); showRoute(null); document.querySelector('nav button[data-view=map]').click(); }
+  function endPlan() { planning = false; planWps = []; planLayer.clearLayers(); $('#planbar').classList.add('hidden'); $('#hud').classList.remove('hidden'); }
+  map.on('click', e => {
+    if (!planning) return; let wp = { lat: +e.latlng.lat.toFixed(6), lon: +e.latlng.lng.toFixed(6), name: '' };
+    let best = null, bestD = 40; // snap within 40 m
+    liveMarks().forEach(m => { const d = map.distance([m.lat, m.lon], e.latlng); if (d < bestD) { bestD = d; best = m; } });
+    if (best) wp = { lat: best.lat, lon: best.lon, name: best.name };
+    planWps.push(wp); drawPlan();
+  });
+  $('#btn-plan').addEventListener('click', startPlan);
+  $('#plan-undo').addEventListener('click', () => { planWps.pop(); drawPlan(); });
+  $('#plan-cancel').addEventListener('click', endPlan);
+  $('#plan-done').addEventListener('click', () => {
+    if (planWps.length < 2) { toast('Tap at least two waypoints'); return; }
+    const r = touch({ id: newId(), name: '', story: '', wps: planWps.map(w => ({ ...w })), deleted: false, by: crewName() });
+    routes.unshift(r); saveRoutes(); endPlan(); showRoute(r); openSheet(r, true, 'route');
+  });
+  function renderRoutes() {
+    const live = liveRoutes(); const el = $('#routes-list');
+    if (!live.length) { el.innerHTML = '<span class="muted">No routes yet. Tap Plan a route on the map, or describe one to Claude and it will appear here.</span>'; return; }
+    const w = liveWind();
+    el.innerHTML = live.map(r => { const n = narrative(r, w.from, w.kn); return `<div class="markitem"><div class="name">${esc(r.name || 'Route')}</div><div class="note">${r.wps.length} waypoints · ${n.total.toFixed(2)} nm · ${r.wps.filter(x => x.name).map(x => esc(x.name)).join(' → ') || 'open water'}${r.by ? ' · ' + esc(r.by) : ''}</div>
+      <div class="toolbar"><button class="btn sm primary" data-read="${r.id}">Read for today's wind</button><button class="btn sm" data-rshow="${r.id}">Show on map</button></div></div>`; }).join('');
+    el.querySelectorAll('[data-read]').forEach(b => b.addEventListener('click', () => openRouteSheet(routes.find(r => r.id === b.dataset.read))));
+    el.querySelectorAll('[data-rshow]').forEach(b => b.addEventListener('click', () => { showRoute(routes.find(r => r.id === b.dataset.rshow)); document.querySelector('nav button[data-view=map]').click(); }));
+  }
+
+  /* ---------- Drills ---------- */
+  const DRILLS = [
+    { id: 'mob', name: 'Man overboard', why: 'The most important drill to rehearse. Practice with a cushion or fender as the person.',
+      steps: ['Shout "Man overboard" so the whole crew knows.', 'Assign a spotter whose only job is to point at the person and never look away.', 'Throw flotation immediately (cushion or ring) to mark the spot and give them something to hold.', 'Figure 8: sail off on a beam reach 4 to 6 boat lengths, tack, return on a broad reach, then head up to a close reach just to windward of the person and luff to a stop alongside. No jibe involved, which suits a small boat.', 'Quick stop variant: fall off briefly to a broad reach, head up and tack, settle on a close reach, and finish the same way. Fewer maneuvers.', 'Either way, finish on a close reach with sails luffing so you can slow or re-accelerate if you misjudge it.', 'Bring them alongside to leeward so the boat drifts away from them, not onto them. Ladder if they can climb; otherwise a line under the arms, hoisting upward with a winch or spare halyard.', 'Cold water: get wet clothes off, wrap the core and head, share body heat, warm (not hot) drinks, no alcohol.'],
+      src: 'From your ASA 101 sailing guide, section 15, and the dock cheat sheet.' },
+    { id: 'heave', name: 'Heave to', why: 'Parks the boat almost in place under sail: for lunch, to reef, or to sort out a problem.',
+      steps: ['Start close hauled.', 'Tack, but leave the jib sheet cleated so the jib ends up backed (filled on the wrong side).', 'Ease the mainsail out.', 'Push the tiller to leeward and tie it there.', 'The backed jib pushes the bow down while the rudder pushes it up; the boat drifts slowly and calmly. You are still under way, so keep a lookout.', 'To get going again: free the jib sheet, sheet it on the new side, center the tiller, trim the main.'],
+      src: 'From your ASA 101 sailing guide, section 13.' },
+    { id: 'reef', name: 'Reefing and depowering', why: 'Wind force scales with the square of the speed; 20 knots hits about four times as hard as 10. Take power out before it takes you.',
+      steps: ['Go down the ladder only as far as you need, back to front.', 'Crew weight to the high (windward) side.', 'Flatten the sails: tighten outhaul and luff.', 'Feather up: steer a touch closer to the wind so the front of the main just breathes in gusts.', 'Ease the mainsail a few inches or drop the traveler to leeward.', 'Reduce area for real: drop or roll the jib (a keelboat sails happily on main alone), or reef the main by lowering it partway and tying off the bottom band.', 'Time to depower: heeling past about 15 to 20 degrees, or the tiller fighting you (weather helm).', 'In strong wind do not run dead downwind; a small shift can jibe the boom. Stay on a broad reach.', 'Practice putting the reef in and shaking it out at the slip and then in light air, before you need it.'],
+      src: 'From your ASA 101 sailing guide, section 9.' },
+    { id: 'dock', name: 'Docking and leaving the slip under power', why: 'No brakes. Speed control and using the wind are the whole game. Practice at the slip on calm days first.',
+      steps: ['Before leaving: motor started and warmed, cooling stream visible, kill cord on, rudder centered so you are not steering with two systems, fenders and lines ready, plan the exit against the wind.', 'Leaving: with lines singled up, push off or back out slowly. Reverse feels odd and boats are not happy stern first, so short and slow. Once clear, forward gear and idle away.', 'Returning: approach into the wind (or current) where you can, so the wind stops you. Err conservative: slow early, you can always add a short burst.', 'Wind blowing off the dock: same upwind idea, a little less margin; if you fall short you are blown clear to try again.', 'Wind blowing onto the dock: stop parallel about half a boat length off and let the wind set you down gently. Roving fender ready.', 'Wind from behind: least control. Come in at the slowest speed that still steers and use short bursts of forward, not reverse, to control the last few feet.', 'Snub a line around a cleat to absorb momentum. Never stop the boat with your body, and never put any part of you between the boat and the dock.', 'If it is going wrong, abort into clear water and try again.'],
+      src: 'Docking approaches from your ASA 101 guide, sections 13, 14, and 19. The slip specific steps are a starter list; check them against what your instructor taught.' }
+  ];
+  let drillLog = (store.get('drillLog', []) || []); const saveDrillLog = () => store.set('drillLog', drillLog);
+  function renderDrills() {
+    $('#drills').innerHTML = DRILLS.map(d => `<div class="card drill"><div class="row"><div class="grow"><b>${d.name}</b><div class="small muted">${d.why}</div></div><button class="btn sm" data-dtoggle="${d.id}">Steps</button><button class="btn sm primary" data-dlog="${d.id}">Log practice</button></div><ol class="hidden" data-dsteps="${d.id}">${d.steps.map(x => `<li>${x}</li>`).join('')}<div class="src">${d.src}</div></ol></div>`).join('');
+    $('#drills').querySelectorAll('[data-dtoggle]').forEach(b => b.addEventListener('click', () => $('#drills').querySelector(`[data-dsteps="${b.dataset.dtoggle}"]`).classList.toggle('hidden')));
+    $('#drills').querySelectorAll('[data-dlog]').forEach(b => b.addEventListener('click', () => openDrillLog(DRILLS.find(d => d.id === b.dataset.dlog))));
+    const live = drillLog.filter(d => !d.deleted).sort((a, b) => b.at - a.at); const el = $('#drilllog');
+    el.innerHTML = live.length ? live.slice(0, 30).map(d => { const dr = DRILLS.find(x => x.id === d.drill); return `<div class="markitem"><div class="name">${dr ? dr.name : esc(d.drill)} <span class="small muted">${'●'.repeat(d.rating || 0)}${'○'.repeat(3 - (d.rating || 0))}</span></div><div class="note">${new Date(d.at).toLocaleDateString()}${d.who ? ' · ' + esc(d.who) : ''}${d.notes ? '\n' + esc(d.notes) : ''}</div><div class="toolbar"><button class="btn sm danger" data-ldel="${d.id}">Delete</button></div></div>`; }).join('') : '<span class="muted">Nothing logged yet.</span>';
+    el.querySelectorAll('[data-ldel]').forEach(b => b.addEventListener('click', () => { const d = drillLog.find(x => x.id === b.dataset.ldel); if (confirm('Delete this entry?')) { d.deleted = true; touch(d); saveDrillLog(); renderDrills(); syncSoon(); } }));
+  }
+  function openDrillLog(d) {
+    const box = $('#rsheet-box'); let rating = 2;
+    box.innerHTML = `<h2>Log: ${d.name}</h2><div class="small muted">How did it go?</div><div class="toolbar rating" style="margin-top:6px"><button class="btn sm" data-r="1">1</button><button class="btn sm on" data-r="2">2</button><button class="btn sm" data-r="3">3</button><span class="small muted" style="align-self:center">1 rough, 2 okay, 3 nailed it</span></div>
+      <label style="display:block;font-size:12px;color:var(--muted);margin-top:8px">Notes<textarea id="dl-notes" placeholder="what worked, what to fix next time"></textarea></label>
+      <div class="toolbar" style="margin-top:12px"><button class="btn primary" id="dl-save">Save</button><button class="btn" id="dl-cancel">Cancel</button></div>`;
+    box.querySelectorAll('[data-r]').forEach(b => b.addEventListener('click', () => { rating = +b.dataset.r; box.querySelectorAll('[data-r]').forEach(x => x.classList.toggle('on', x === b)); }));
+    box.querySelector('#dl-save').addEventListener('click', () => { drillLog.unshift(touch({ id: newId(), drill: d.id, at: Date.now(), who: crewName(), rating, notes: box.querySelector('#dl-notes').value.trim(), deleted: false, by: crewName() })); saveDrillLog(); closeRouteSheet(); renderDrills(); syncSoon(); toast('Logged'); });
+    box.querySelector('#dl-cancel').addEventListener('click', closeRouteSheet);
+    $('#rsheet').classList.remove('hidden');
+  }
+  function renderPlan() { renderRoutes(); renderDrills(); }
+
+  /* ---------- Shared sync (Supabase) ---------- */
+  const SB_URL = 'https://lzjvoymaxuyavysekkvi.supabase.co';
+  const SB_KEY = 'sb_publishable_m1O9J05i2D6BoRMFneRBeQ_XSBlO4vR';
+  const crew = () => store.get('crew', null);
+  const crewName = () => (crew() && crew().name) || '';
+  let syncState = { busy: false, last: store.get('syncLast', 0), error: crew() ? '' : 'nokey' };
+  async function sb(path, opts) {
+    opts = opts || {}; const c = crew(); if (!c) throw new Error('nokey');
+    const r = await fetch(SB_URL + '/rest/v1/' + path, { method: opts.method || 'GET', body: opts.body ? JSON.stringify(opts.body) : undefined,
+      headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'x-boat-key': c.key, 'Content-Type': 'application/json', Prefer: opts.prefer || 'return=minimal' } });
+    if (r.status === 401 || r.status === 403) throw new Error('badkey');
+    if (!r.ok) throw new Error('http ' + r.status);
+    const t = await r.text(); return t ? JSON.parse(t) : null;
+  }
+  const iso = ms => new Date(ms).toISOString();
+  async function syncAll() {
+    if (syncState.busy || !crew() || !navigator.onLine) return; syncState.busy = true; renderSyncStatus();
+    try {
+      // push dirty marks and sails
+      const dm = marks.filter(m => m.dirty).map(m => ({ id: m.id, name: m.name, note: m.note || '', story: m.story || '', kind: m.kind || 'mark', lat: m.lat, lon: m.lon, created_at: iso(m.at || m.updated), updated_at: iso(m.updated), deleted: !!m.deleted, device: m.by || '' }));
+      if (dm.length) { await sb('marks', { method: 'POST', body: dm, prefer: 'resolution=merge-duplicates,return=minimal' }); marks.forEach(m => m.dirty = false); }
+      const ds = sails.filter(t => t.dirty).map(t => ({ id: t.id, name: t.name || '', story: t.story || '', started: iso(t.started), ended: iso(t.ended), pts: t.pts, updated_at: iso(t.updated), deleted: !!t.deleted, device: t.by || '' }));
+      if (ds.length) { await sb('sails', { method: 'POST', body: ds, prefer: 'resolution=merge-duplicates,return=minimal' }); sails.forEach(t => t.dirty = false); }
+      const dr = routes.filter(r => r.dirty).map(r => ({ id: r.id, name: r.name || '', story: r.story || '', waypoints: r.wps, updated_at: iso(r.updated), deleted: !!r.deleted, device: r.by || '' }));
+      if (dr.length) { await sb('routes', { method: 'POST', body: dr, prefer: 'resolution=merge-duplicates,return=minimal' }); routes.forEach(r => r.dirty = false); }
+      const dl = drillLog.filter(d => d.dirty).map(d => ({ id: d.id, drill: d.drill, at: iso(d.at), who: d.who || '', rating: d.rating || 0, notes: d.notes || '', updated_at: iso(d.updated), deleted: !!d.deleted, device: d.by || '' }));
+      if (dl.length) { await sb('drill_log', { method: 'POST', body: dl, prefer: 'resolution=merge-duplicates,return=minimal' }); drillLog.forEach(d => d.dirty = false); }
+      // pull everything changed since the last pull (minus a minute of slack)
+      const since = iso(Math.max(0, syncState.last - 60000));
+      const rm = await sb('marks?select=*&updated_at=gt.' + encodeURIComponent(since));
+      let changed = false;
+      rm.forEach(r => { const u = Date.parse(r.updated_at); const loc = marks.find(m => m.id === r.id);
+        if (!loc) { marks.push({ id: r.id, name: r.name, note: r.note || '', story: r.story || '', kind: r.kind || 'mark', lat: r.lat, lon: r.lon, at: Date.parse(r.created_at), updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
+        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { name: r.name, note: r.note || '', story: r.story || '', kind: r.kind || 'mark', lat: r.lat, lon: r.lon, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
+      const rs = await sb('sails?select=*&updated_at=gt.' + encodeURIComponent(since));
+      rs.forEach(r => { const u = Date.parse(r.updated_at); const loc = sails.find(t => t.id === r.id);
+        if (!loc) { sails.push({ id: r.id, name: r.name || '', story: r.story || '', started: Date.parse(r.started), ended: Date.parse(r.ended), pts: r.pts, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
+        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { name: r.name || '', story: r.story || '', updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
+      const rr = await sb('routes?select=*&updated_at=gt.' + encodeURIComponent(since));
+      rr.forEach(r => { const u = Date.parse(r.updated_at); const loc = routes.find(x => x.id === r.id);
+        if (!loc) { routes.push({ id: r.id, name: r.name || '', story: r.story || '', wps: r.waypoints, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
+        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { name: r.name || '', story: r.story || '', wps: r.waypoints, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
+      const rl = await sb('drill_log?select=*&updated_at=gt.' + encodeURIComponent(since));
+      rl.forEach(r => { const u = Date.parse(r.updated_at); const loc = drillLog.find(x => x.id === r.id);
+        if (!loc) { drillLog.push({ id: r.id, drill: r.drill, at: Date.parse(r.at), who: r.who || '', rating: r.rating || 0, notes: r.notes || '', updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
+        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { drill: r.drill, at: Date.parse(r.at), who: r.who || '', rating: r.rating || 0, notes: r.notes || '', updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
+      syncState.last = Date.now(); store.set('syncLast', syncState.last); syncState.error = '';
+      store.set('marks', marks); saveSails(); saveRoutes(); saveDrillLog();
+      if (changed) { drawMarks(); if ($('#view-marks').classList.contains('active')) renderMarks(); if ($('#view-plan').classList.contains('active')) renderPlan(); if (shownRoute) showRoute(routes.find(r => r.id === shownRoute.id) || null); }
+    } catch (e) { syncState.error = e.message === 'badkey' ? 'badkey' : (e.message === 'nokey' ? 'nokey' : 'offline'); }
+    syncState.busy = false; renderSyncStatus();
+  }
+  let syncTimer = null;
+  function syncSoon() { clearTimeout(syncTimer); syncTimer = setTimeout(syncAll, 1500); }
+  function renderSyncStatus() {
+    const el = $('#syncstatus'); if (!el) return; const c = crew();
+    const pending = marks.filter(m => m.dirty).length + sails.filter(t => t.dirty).length + routes.filter(r => r.dirty).length + drillLog.filter(d => d.dirty).length;
+    let txt;
+    if (!c) txt = 'Not syncing yet. Enter the crew name and passphrase on the Info tab to share marks and sails between phones.';
+    else if (syncState.busy) txt = 'Syncing…';
+    else if (syncState.error === 'badkey') txt = 'Passphrase not accepted. Check it on the Info tab.';
+    else if (syncState.error === 'offline') txt = 'Offline. ' + (pending ? pending + ' change(s) waiting to sync.' : 'Will sync when signal returns.');
+    else txt = 'Synced ' + (syncState.last ? fmtTime(new Date(syncState.last)) : '') + (pending ? ' · ' + pending + ' waiting' : '') + ' · signed in as ' + esc(c.name);
+    el.textContent = txt; el.classList.toggle('warn', !c || !!syncState.error);
+    const info = $('#crewstatus'); if (info) info.textContent = c ? ('Signed in as ' + c.name + (syncState.error === 'badkey' ? ', passphrase not accepted' : syncState.error === 'offline' ? ', offline' : ', syncing')) : 'Not signed in';
+  }
+  $('#crew-save').addEventListener('click', async () => {
+    const name = $('#crew-name').value.trim(), key = $('#crew-key').value.trim();
+    if (!name || !key) { toast('Enter both a name and the passphrase'); return; }
+    store.set('crew', { name, key }); syncState.error = ''; syncState.last = 0; store.set('syncLast', 0);
+    try { const ok = await sb('rpc/crew_check', { method: 'POST', body: {} }); if (ok !== true) { syncState.error = 'badkey'; renderSyncStatus(); toast('Passphrase not accepted'); return; } }
+    catch (e) { syncState.error = 'offline'; renderSyncStatus(); toast('Could not reach the server, will retry'); return; }
+    marks.forEach(m => { if (!m.by) m.by = name; m.dirty = true; }); sails.forEach(t => { if (!t.by) t.by = name; t.dirty = true; }); routes.forEach(r => { if (!r.by) r.by = name; r.dirty = true; }); drillLog.forEach(d => { if (!d.by) d.by = name; d.dirty = true; });
+    toast('Signed in as ' + name); await syncAll();
+  });
+  $('#crew-signout').addEventListener('click', () => { localStorage.removeItem('crew'); syncState.error = 'nokey'; renderSyncStatus(); $('#crew-name').value = ''; $('#crew-key').value = ''; toast('Signed out on this phone'); });
+  (function initCrew() { const c = crew(); if (c) { $('#crew-name').value = c.name; $('#crew-key').value = c.key; } renderSyncStatus(); })();
+  setInterval(() => { if (document.visibilityState === 'visible') syncAll(); }, 30000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncAll(); });
+  window.addEventListener('online', syncAll);
+  recoverTrack(); syncAll();
 
   /* ---------- Wind animation on the map ---------- */
   const WIND_BINS = [[0, 5, '#9fd8ff'], [5, 10, '#5fd38d'], [10, 15, '#ffcc4d'], [15, 20, '#ff9f40'], [20, 99, '#ff5a5a']];
