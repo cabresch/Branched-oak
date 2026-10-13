@@ -36,6 +36,17 @@
   nav button.active { color: var(--accent); }
   nav button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
+  /* heel-o-meter strip on the map */
+  #heelstrip { position: absolute; left: 10px; top: 10px; z-index: 500; display: flex; align-items: center; gap: 10px; background: rgba(16,52,77,.92); border: 1px solid var(--line); border-radius: 12px; padding: 6px 12px 6px 10px; max-width: calc(100% - 76px); box-shadow: 0 2px 8px rgba(0,0,0,.35); color: #fff; cursor: pointer; transition: background .35s; user-select: none; }
+  #hs-num { font-size: 36px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; text-shadow: 0 1px 6px rgba(0,0,0,.35); }
+  #hs-num sup { font-size: .45em; vertical-align: top; font-weight: 500; }
+  #hs-txt { display: flex; flex-direction: column; line-height: 1.2; }
+  #hs-zone { font-size: 14px; font-weight: 700; text-shadow: 0 1px 4px rgba(0,0,0,.35); }
+  #hs-side { font-size: 12px; color: rgba(255,255,255,.85); }
+  #legend-info, #windlegend-info { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; margin: 8px 0; }
+  #legend-info span, #windlegend-info span { display: flex; align-items: center; gap: 4px; }
+  #legend-info i { display: inline-block; width: 14px; height: 4px; border-radius: 2px; }
+  #windlegend-info i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
   /* map overlays */
   .mapbtns { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 8px; z-index: 500; }
   .mapbtns button, .fab { background: rgba(16,52,77,.92); color: var(--text); border: 1px solid var(--line); border-radius: 10px; width: 44px; height: 44px; font-size: 13px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
@@ -45,12 +56,6 @@
   #hud b { font-size: 20px; font-weight: 600; }
   #hud .sub { color: var(--muted); }
   #hud .rec { color: var(--danger); font-weight: 600; }
-  .legends { position: absolute; left: 10px; top: 10px; z-index: 500; display: flex; flex-direction: column; gap: 4px; max-width: calc(100% - 80px); }
-  #legend, #windlegend { background: rgba(16,52,77,.88); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: 11px; display: flex; gap: 7px; flex-wrap: wrap; }
-  #legend span, #windlegend span { display: flex; align-items: center; gap: 3px; }
-  #legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; }
-  #windlegend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
-  #windlegend .lbl { color: var(--muted); }
   #windcanvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 450; }
   .zoombtns { position: absolute; right: 10px; bottom: 34px; z-index: 500; display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0,0,0,.35); }
   .zoombtns button { background: rgba(16,52,77,.92); color: var(--text); border: 0; width: 44px; height: 44px; font-size: 24px; line-height: 1; }
@@ -162,10 +167,7 @@
     <section class="view active" id="view-map">
       <div id="map"></div>
       <canvas id="windcanvas"></canvas>
-      <div class="legends">
-        <div id="legend"></div>
-        <div id="windlegend"></div>
-      </div>
+      <div id="heelstrip" title="Heel-O-Meter"><div id="hs-num">–</div><div id="hs-txt"><div id="hs-zone">Heel-O-Meter</div><div id="hs-side">tap to start</div></div></div>
       <div class="mapbtns">
         <button id="btn-locate" title="Center on me"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
         <button id="btn-track" title="Start or stop track recording"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/></svg></button>
@@ -249,10 +251,17 @@
       <div class="panel">
         <h2>About the depth map</h2>
         <div class="card">
+          <div id="legend-info"><span class="muted">Contours load when the map opens.</span></div>
           <p>Depth contours come from the Nebraska Game and Parks Commission lake bathymetry program (Lake Contours layer on NebraskaMap), surveyed with the U.S. Bureau of Reclamation. Branched Oak has ten contours at 3 foot intervals, 3 ft to 30 ft.</p>
           <p>Depths are referenced to the survey pool. In the data, the 3 ft contour sits at elevation 1281.0 ft, which puts the survey water surface at about 1284 ft. If the lake is below that level, actual depth is less than the contour shows.</p>
           <p><b>Buen Camino draws 2.5 ft</b> (wing keel). The <span style="color:#ff5a5a;font-weight:600">3 ft line</span> is drawn in red: inside it you have about 6 inches under the keel at survey pool, and less if the lake is down. The <span style="color:#ff9f40;font-weight:600">6 ft line</span> is orange.</p>
           <p>Contours load from the Game and Parks service when online and are cached on this phone so the map still works with weak signal. Basemap tiles need signal unless recently viewed.</p>
+        </div>
+        <h3>Wind arrows and the Heel-O-Meter</h3>
+        <div class="card">
+          <p class="small">The arrows on the map blow with the current forecast wind. Their color is the speed:</p>
+          <div id="windlegend-info"><span class="muted">Loads with the forecast.</span></div>
+          <p class="small" style="margin-top:10px">The Heel-O-Meter sits at the top of the map. Tap it to start it, then set the phone down flat with its top toward the bow, or stand it upright in portrait facing fore or aft, and tap Zero while she sits level in the slip. The zero is remembered. Under 15 degrees is settled, 15 to 20 is Kimberley's Happy Zone, and over 20 the boat is asking you to ease or reef. If port and starboard come out backwards, tap Swap sides once.</p>
         </div>
         <h3>Crew sign in</h3>
         <div class="card">
@@ -486,7 +495,7 @@ const SA = (() => {
 <script>
 (function () {
   'use strict';
-  const APP_VERSION = '5.1';
+  const APP_VERSION = '5.3';
   const LAKE = { lat: 40.975, lon: -96.870, zoom: 14 };
   const DRAFT_FT = 2.5;
   const CONTOUR_URL = "https://services5.arcgis.com/IOshH1zLrIieqrNk/arcgis/rest/services/LakeContours/FeatureServer/0/query"
@@ -558,7 +567,7 @@ const SA = (() => {
     map.on('zoomend', () => { if (map.getZoom() >= 15) labelLayer.addTo(map); else map.removeLayer(labelLayer); });
     if (map.getZoom() >= 15) labelLayer.addTo(map);
     const depths = [...new Set(gj.features.map(f => f.properties.Depth))].sort((a, b) => a - b);
-    $('#legend').innerHTML = depths.map(d => `<span><i style="background:${depthColor(d)}"></i>${d}'</span>`).join('');
+    $('#legend-info').innerHTML = depths.map(d => `<span><i style="background:${depthColor(d)}"></i>${d}'</span>`).join('');
   }
   async function loadContours() {
     const cached = store.get('contours', null);
@@ -611,7 +620,7 @@ const SA = (() => {
 
   /* ---------- GPS and tracking ---------- */
   let watchId = null, posMarker = null, accCircle = null, headingEl = null, wakeLock = null;
-  let recording = false, track = [], trackLine = null, lastPos = null, followMe = true, fixBuf = [];
+  let recording = false, track = [], trackLine = null, lastPos = null, followMe = true, fixBuf = [], lastCog = null, lastKn = null;
   const posIcon = L.divIcon({ className: '', html: '<div class="pos-dot"></div><div class="pos-heading hidden"></div>', iconSize: [16, 16], iconAnchor: [8, 8] });
   function startGps() {
     if (!navigator.geolocation) { toast('No GPS available in this browser'); return; }
@@ -631,7 +640,7 @@ const SA = (() => {
     else if (speed != null && speed >= 0) { kn = speed * 1.94384; if (heading != null && !isNaN(heading) && kn > 0.5) cog = heading; }
     $('#hud-sog').textContent = kn != null ? kn.toFixed(1) : '–';
     $('#hud-cog').textContent = cog != null ? Math.round(cog) : '–';
-    heading = cog;
+    heading = cog; lastCog = cog; lastKn = kn;
     if (headingEl) { if (heading != null && !isNaN(heading) && kn > 0.5) { headingEl.classList.remove('hidden'); headingEl.style.transform = `rotate(${heading}deg)`; } else headingEl.classList.add('hidden'); }
     $('#hud-sub').innerHTML = (recording ? '<span class="rec">● REC</span> ' : '') + `±${Math.round(accuracy)} m · ${fmtTime(new Date(p.timestamp))}`;
     if (followMe) map.panTo(ll, { animate: true, duration: .5 });
@@ -779,6 +788,62 @@ const SA = (() => {
     el.querySelectorAll('[data-more]').forEach(b => b.addEventListener('click', () => { const s = el.querySelector(`[data-story="${b.dataset.more}"]`); s.classList.toggle('clamp'); b.textContent = s.classList.contains('clamp') ? 'Read more' : 'Show less'; }));
     el.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { if (confirm('Delete this sail?')) { const t = sails.find(x => x.id == b.dataset.del); t.deleted = true; touch(t); saveSails(); renderTracks(); syncSoon(); } }));
   }
+
+  /* ---------- Heel-O-Meter (strip at the top of the map) ---------- */
+  let heelOn = false, heelG = null, heelZero = store.get('heelZero', null), heelSwap = store.get('heelSwap', false), heelMax = 0, heelCur = null, heelTimer = null, heelSheetOpen = false;
+  function heelAngle(g) {
+    // which phone axis is closest to vertical decides how the phone is sitting; heel is the roll about the boat's fore and aft line
+    const ax = Math.abs(g.x), ay = Math.abs(g.y), az = Math.abs(g.z);
+    if (az >= ax && az >= ay) return Math.atan2(g.x, az) * 180 / Math.PI;      // flat, top toward the bow
+    if (ay >= ax) return Math.atan2(g.x, ay) * 180 / Math.PI;                  // upright in portrait, facing fore or aft
+    return Math.atan2(g.y, ax) * 180 / Math.PI;                                // upright in landscape, facing fore or aft
+  }
+  function onMotion(e) {
+    const a = e.accelerationIncludingGravity; if (!a || a.x == null) return;
+    const k = 0.12; heelG = heelG ? { x: heelG.x + k * (a.x - heelG.x), y: heelG.y + k * (a.y - heelG.y), z: heelG.z + k * (a.z - heelG.z) } : { x: a.x, y: a.y, z: a.z };
+  }
+  function heelZoneOf(d) { return d < 15 ? 'settled' : d < 20 ? "Kimberley's Happy Zone" : 'ease or reef'; }
+  function heelColor(d) { if (d >= 20) return 'rgba(200,32,47,.94)'; if (d >= 15) return 'rgba(212,161,6,.94)'; const t = Math.min(1, d / 15); return `hsl(145 ${Math.round(35 + 55 * t)}% ${Math.round(30 + 8 * t)}% / .94)`; }
+  function heelPosLine() {
+    const w = liveWind();
+    if (lastCog != null && lastKn != null && lastKn > 0.8 && w.kn != null) { const tp = SA.tackAndPos(lastCog, w.from); return (tp.pos === 'too close to the wind' ? 'pointed into the wind' : tp.pos + ', ' + tp.tack + ' tack') + ' · wind ' + compass(w.from) + ' ' + Math.round(w.kn) + ' kn (forecast) · course ' + Math.round(lastCog); }
+    if (w.kn != null) return 'wind ' + compass(w.from) + ' ' + Math.round(w.kn) + ' kn (forecast) · point of sail shows once the GPS has a course';
+    return 'no wind data yet';
+  }
+  function heelRender() {
+    if (!heelG) return;
+    let raw = heelAngle(heelG); if (heelZero != null) raw -= heelZero; if (heelSwap) raw = -raw;
+    heelCur = raw; const d = Math.abs(raw); if (d > heelMax) heelMax = d;
+    $('#hs-num').innerHTML = Math.round(d) + '<sup>°</sup>';
+    $('#hs-zone').textContent = heelZoneOf(d);
+    $('#hs-side').textContent = d < 1.5 ? 'level' : (raw > 0 ? 'to starboard' : 'to port');
+    $('#heelstrip').style.background = heelColor(d);
+    if (heelSheetOpen) { const p = $('#heel-pos'), m = $('#heel-max'); if (p) p.textContent = heelPosLine(); if (m) m.textContent = heelMax >= 1 ? 'Most heel since zero: ' + Math.round(heelMax) + '°' : ''; }
+  }
+  async function heelStart() {
+    if (heelOn) return true;
+    try { if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === 'function') { const r = await DeviceMotionEvent.requestPermission(); if (r !== 'granted') { toast('Motion access was not allowed'); return false; } } } catch (e) { toast('Motion access was not allowed'); return false; }
+    if (!window.DeviceMotionEvent) { toast('This device does not report tilt'); return false; }
+    window.addEventListener('devicemotion', onMotion); heelOn = true; heelMax = 0;
+    heelTimer = setInterval(heelRender, 150);
+    toast(heelZero == null ? 'Set the phone down level, then tap the meter and Zero' : 'Heel-O-Meter running', 4000);
+    return true;
+  }
+  function heelZeroNow() { if (!heelG) { toast('Start the meter first'); return; } heelZero = heelAngle(heelG); heelMax = 0; store.set('heelZero', heelZero); toast('Zeroed. This is level.'); heelRender(); }
+  function openHeelSheet() {
+    const box = $('#rsheet-box'); $('#rsheet').classList.remove('hidden'); heelSheetOpen = true;
+    box.innerHTML = `<h2>Heel-O-Meter</h2>
+      <div id="heel-pos" class="small" style="margin:4px 0">${heelOn ? heelPosLine() : 'Not running yet.'}</div><div id="heel-max" class="small muted"></div>
+      <div class="toolbar" style="margin-top:12px"><button class="btn primary" id="heel-start">${heelOn ? 'Running' : 'Start'}</button><button class="btn" id="heel-zero">Zero</button><button class="btn" id="heel-swap">${heelSwap ? 'Sides swapped' : 'Swap sides'}</button><button class="btn" id="heel-close">Close</button></div>
+      <div class="small muted">Lay the phone flat with its top toward the bow, or stand it upright in portrait facing fore or aft. Tap Zero while she sits level in the slip; the zero is remembered. Under 15 is settled, 15 to 20 is Kimberley's Happy Zone, over 20 the boat is asking you to ease or reef.</div>`;
+    box.querySelector('#heel-start').addEventListener('click', async () => { if (await heelStart()) box.querySelector('#heel-start').textContent = 'Running'; });
+    box.querySelector('#heel-zero').addEventListener('click', heelZeroNow);
+    box.querySelector('#heel-swap').addEventListener('click', () => { heelSwap = !heelSwap; store.set('heelSwap', heelSwap); box.querySelector('#heel-swap').textContent = heelSwap ? 'Sides swapped' : 'Swap sides'; heelRender(); });
+    box.querySelector('#heel-close').addEventListener('click', () => { heelSheetOpen = false; closeRouteSheet(); });
+    heelRender();
+  }
+  $('#heelstrip').addEventListener('click', async () => { if (!heelOn) { if (await heelStart()) { $('#hs-side').textContent = 'starting…'; } } else openHeelSheet(); });
+  $('#heelstrip').addEventListener('contextmenu', e => e.preventDefault());
 
   /* ---------- Marks ---------- */
   let marks = (store.get('marks', []) || []).map(m => ({ ...m, id: String(m.id), kind: m.kind || 'mark', updated: m.updated || m.at || Date.now(), deleted: !!m.deleted, by: m.by || '' }));
@@ -1250,14 +1315,13 @@ const SA = (() => {
   const wc = $('#windcanvas'), wctx = wc.getContext('2d');
   let windOn = store.get('windAnim', true), particles = [], windRaf = null, windState = null;
   $('#btn-wind').classList.toggle('on', windOn);
-  $('#btn-wind').addEventListener('click', () => { windOn = !windOn; store.set('windAnim', windOn); $('#btn-wind').classList.toggle('on', windOn); $('#windlegend').classList.toggle('hidden', !windOn); windOn ? startWind() : stopWind(); });
+  $('#btn-wind').addEventListener('click', () => { windOn = !windOn; store.set('windAnim', windOn); $('#btn-wind').classList.toggle('on', windOn); windOn ? startWind() : stopWind(); });
   function sizeWind() { const r = wc.getBoundingClientRect(); const dpr = Math.min(2, window.devicePixelRatio || 1); wc.width = Math.round(r.width * dpr); wc.height = Math.round(r.height * dpr); wctx.setTransform(dpr, 0, 0, dpr, 0, 0); wc._w = r.width; wc._h = r.height; }
   function setWindState() {
     if (!wx || !wx.current) return;
     const c = wx.current; const kn = c.wind_speed_10m, toDeg = (c.wind_direction_10m + 180) % 360; const rad = toDeg * Math.PI / 180;
     windState = { kn, dx: Math.sin(rad), dy: -Math.cos(rad), color: windColor(kn), dir: compass(c.wind_direction_10m) };
-    $('#windlegend').innerHTML = `<span class="lbl">wind ${Math.round(kn)} kn from ${windState.dir}</span>` + WIND_BINS.map(b => `<span><i style="background:${b[2]}"></i>${b[1] > 50 ? b[0] + '+' : b[0] + '-' + b[1]}</span>`).join('');
-    $('#windlegend').classList.toggle('hidden', !windOn);
+    $('#windlegend-info').innerHTML = `<span class="muted">now ${Math.round(kn)} kn from ${windState.dir}</span>` + WIND_BINS.map(b => `<span><i style="background:${b[2]}"></i>${b[1] > 50 ? b[0] + '+' : b[0] + '-' + b[1]}</span>`).join('');
   }
   function seed(n) { particles = []; for (let i = 0; i < n; i++) particles.push({ x: Math.random() * wc._w, y: Math.random() * wc._h, life: Math.random() * 300 }); }
   function drawArrow(x, y, dx, dy, col) { const s = 6; wctx.save(); wctx.translate(x, y); wctx.rotate(Math.atan2(dy, dx) + Math.PI / 2); wctx.beginPath(); wctx.moveTo(0, -s); wctx.lineTo(s * .6, s); wctx.lineTo(0, s * .45); wctx.lineTo(-s * .6, s); wctx.closePath(); wctx.fillStyle = col; wctx.fill(); wctx.restore(); }
