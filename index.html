@@ -47,6 +47,34 @@
   #legend-info span, #windlegend-info span { display: flex; align-items: center; gap: 4px; }
   #legend-info i { display: inline-block; width: 14px; height: 4px; border-radius: 2px; }
   #windlegend-info i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+  /* sails (awards) */
+  .awardstrip { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px; -webkit-overflow-scrolling: touch; }
+  .award { flex: none; width: 86px; text-align: center; font-size: 11px; color: var(--muted); cursor: pointer; }
+  .awardgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 4px; }
+  .awardgrid .award { width: auto; }
+  .award svg { width: 64px; height: 77px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.4)); }
+  .award.locked svg { opacity: .3; filter: grayscale(1); }
+  .award .nm { color: var(--text); font-weight: 600; font-size: 11px; line-height: 1.2; margin-top: 2px; }
+  .award.locked .nm { color: var(--muted); font-weight: 500; }
+  .award .tier, .face .tier { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; margin-top: 2px; }
+  .face .tier { font-size: 12px; margin-top: 6px; }
+  .tier.bronze { color: #c8803a; } .tier.silver { color: #cfd4dc; } .tier.gold { color: #f2c14e; }
+  .secret { width: 64px; height: 77px; margin: 0 auto; border-radius: 10px; background: rgba(255,255,255,.06); border: 1px dashed var(--line); display: flex; align-items: center; justify-content: center; font-size: 34px; color: var(--muted); }
+  .secret.big { width: 150px; height: 180px; font-size: 80px; }
+  .flip { perspective: 1000px; width: 230px; height: 310px; margin: 4px auto 8px; touch-action: pan-y; cursor: grab; }
+  .flip .inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .55s cubic-bezier(.2,.7,.3,1); }
+  .flip.drag .inner { transition: none; }
+  .face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 14px; text-align: center; }
+  .face.front { background: radial-gradient(circle at 50% 28%, #1f5f8a, #0d2c42 72%); border: 1px solid var(--line); }
+  .face.front svg { filter: drop-shadow(0 6px 10px rgba(0,0,0,.5)); }
+  .fname { font-size: 18px; font-weight: 700; margin-top: 10px; }
+  .face.back { transform: rotateY(180deg); background: linear-gradient(160deg, #2e2e2e, #121212); border: 1px solid #4a4a4a; }
+  .engr { font-family: Georgia, 'Times New Roman', serif; color: #e6d9b4; text-shadow: 0 1px 0 #000, 0 -1px 0 rgba(255,255,255,.08); }
+  .etitle { font-size: 20px; letter-spacing: .04em; margin-bottom: 10px; border-bottom: 1px solid rgba(230,217,180,.35); padding-bottom: 8px; }
+  .eline { font-size: 14px; line-height: 1.4; }
+  .pbar { height: 6px; background: rgba(255,255,255,.1); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+  .pbar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+
   /* map overlays */
   .mapbtns { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 8px; z-index: 500; }
   .mapbtns button, .fab { background: rgba(16,52,77,.92); color: var(--text); border: 1px solid var(--line); border-radius: 10px; width: 44px; height: 44px; font-size: 13px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
@@ -212,14 +240,18 @@
 
     <section class="view" id="view-marks">
       <div class="panel">
-        <h2>Marks and sails</h2>
+        <h2>Sails</h2>
+        <div class="small muted" id="awards-sub"></div>
+        <div id="awards-new" class="pending hidden"></div>
+        <div class="card" style="padding:10px 6px 8px"><div class="awardstrip" id="awardstrip"></div><div class="toolbar" style="margin:6px 6px 0"><button class="btn sm" id="btn-awards">See the whole wall</button></div></div>
+        <h2 style="margin-top:18px">Marks</h2>
         <div class="small" id="syncstatus"></div>
         <div class="toolbar">
           <button class="btn sm" id="btn-share-marks">Share marks</button>
           <label class="btn sm">Import marks<input type="file" id="file-marks" accept=".json,application/json"></label>
         </div>
         <div class="card" id="marks-list"><span class="muted">No marks yet. On the map, tap the pin button or press and hold on the water.</span></div>
-        <h3>Sails</h3>
+        <h3>Sail log</h3>
         <div class="card" id="tracks-list"><span class="muted">No sails yet. Tap the record button on the map to start one.</span></div>
         <p class="small muted">Marks and sails are kept on this phone and, once you sign in on the Info tab, in the shared crew list that both phones see. Share and Import are still here as a file backup.</p>
       </div>
@@ -495,7 +527,7 @@ const SA = (() => {
 <script>
 (function () {
   'use strict';
-  const APP_VERSION = '5.3';
+  const APP_VERSION = '5.4';
   const LAKE = { lat: 40.975, lon: -96.870, zoom: 14 };
   const DRAFT_FT = 2.5;
   const CONTOUR_URL = "https://services5.arcgis.com/IOshH1zLrIieqrNk/arcgis/rest/services/LakeContours/FeatureServer/0/query"
@@ -727,7 +759,7 @@ const SA = (() => {
       <div class="photos" id="iv-photos">${(t.photos || []).map(p => `<img src="${p.data}" alt="">`).join('')}</div>
       <div class="toolbar" style="margin-top:12px"><label class="btn primary">${n ? 'Add more' : 'Choose photos'}<input type="file" id="iv-file" accept="image/*" multiple></label><button class="btn" id="iv-done">${n ? 'Done' : 'No photos, done'}</button></div>`;
     box.querySelector('#iv-file').addEventListener('change', async e => { await addPhotos(t, e.target.files); renderInterview(); });
-    box.querySelector('#iv-done').addEventListener('click', () => { t.pending = false; touch(t); saveSails(); syncSoon(); closeRouteSheet(); renderTracks(); toast('Story saved'); });
+    box.querySelector('#iv-done').addEventListener('click', () => { t.pending = false; touch(t); saveSails(); syncSoon(); closeRouteSheet(); renderTracks(); toast('Story saved'); let fresh = []; try { fresh = renderAwards(); } catch (e) {} if (fresh.length) setTimeout(() => { toast('New Sail earned: ' + fresh.map(r => r.aw.name).join(', '), 4000); openAward(fresh[0].aw.id); }, 500); });
   }
   async function addPhotos(t, files) {
     t.photos = t.photos || [];
@@ -845,6 +877,111 @@ const SA = (() => {
   $('#heelstrip').addEventListener('click', async () => { if (!heelOn) { if (await heelStart()) { $('#hs-side').textContent = 'starting…'; } } else openHeelSheet(); });
   $('#heelstrip').addEventListener('contextmenu', e => e.preventDefault());
 
+  /* ---------- Sails (awards) ---------- */
+  const TIER_COLORS = { bronze: '#c8803a', silver: '#cfd4dc', gold: '#f2c14e' };
+  const TIER_NAMES = ['bronze', 'silver', 'gold'];
+  // Each award: id, name, shape, color (single tier) or tiers [{v, label}], for (engraving), measure(ctx) -> {value, sail?, note?} or null, secret
+  const AWARDS = [
+    { id: 'first', name: 'First Sail', shape: 'spinnaker', color: '#6cc3ff', for: 'The first sail ever recorded aboard Buen Camino.', measure: c => c.sails.length ? { value: 1, sail: c.sails[0] } : null },
+    { id: 'nm-month', name: 'Miles in a Month', shape: 'main', unit: 'nm', for: 'Nautical miles sailed in one calendar month.', tiers: [{ v: 5, label: '5 nm' }, { v: 10, label: '10 nm' }, { v: 25, label: '25 nm' }], measure: c => bestGroup(c.byMonth, g => g.nm, g => g.label) },
+    { id: 'nm-season', name: 'Miles in a Season', shape: 'main', unit: 'nm', for: 'Nautical miles sailed in one season.', tiers: [{ v: 25, label: '25 nm' }, { v: 50, label: '50 nm' }, { v: 100, label: '100 nm' }], measure: c => bestGroup(c.bySeason, g => g.nm, g => g.label) },
+    { id: 'out-month', name: 'Outings in a Month', shape: 'jib', unit: 'sails', for: 'Separate sails in one calendar month.', tiers: [{ v: 2, label: '2 outings' }, { v: 4, label: '4 outings' }, { v: 8, label: '8 outings' }], measure: c => bestGroup(c.byMonth, g => g.n, g => g.label) },
+    { id: 'out-season', name: 'Outings in a Season', shape: 'jib', unit: 'sails', for: 'Separate sails in one season.', tiers: [{ v: 5, label: '5 outings' }, { v: 10, label: '10 outings' }, { v: 20, label: '20 outings' }], measure: c => bestGroup(c.bySeason, g => g.n, g => g.label) },
+    { id: 'speed', name: 'Fast Water', shape: 'genoa', unit: 'kn', for: 'Best speed over the ground held for ten seconds.', tiers: [{ v: 5, label: '5 knots' }, { v: 5.5, label: '5.5 knots' }, { v: 5.85, label: 'hull speed, 5.9 knots' }], measure: c => bestSail(c, s => s.peak) },
+    { id: 'long', name: 'Long Haul', shape: 'main', unit: 'nm', for: 'Distance covered in a single sail.', tiers: [{ v: 5, label: '5 nm' }, { v: 8, label: '8 nm' }, { v: 12, label: '12 nm' }], measure: c => bestSail(c, s => s.nm) },
+    { id: 'hours', name: 'All Afternoon', shape: 'jib', unit: 'h', for: 'Time under way in a single sail.', tiers: [{ v: 2, label: '2 hours' }, { v: 3, label: '3 hours' }, { v: 4, label: '4 hours' }], measure: c => bestSail(c, s => s.hours) },
+    { id: 'double', name: 'Double Header', shape: 'spinnaker', color: '#ff8a65', for: 'Two separate sails in one day.', measure: c => { const d = Object.values(c.byDay).find(g => g.n >= 2); return d ? { value: 1, sail: d.sails[1], note: d.label } : null; } },
+    { id: 'voyager', name: 'Voyager', shape: 'spinnaker', color: '#4dd0c4', for: 'A sail recorded somewhere other than Branched Oak Lake.', measure: c => { const s = c.sails.find(s => s.a.offLake); return s ? { value: 1, sail: s } : null; } },
+    { id: 'early', name: 'Early Bird', shape: 'spinnaker', color: '#ffb74d', for: 'A sail under way before nine in the morning.', measure: c => { const s = c.sails.find(s => s.hour < 9); return s ? { value: 1, sail: s } : null; } },
+    { id: 'breeze', name: 'Fresh Breeze', shape: 'genoa', color: '#90a4ae', for: 'A sail in a forecast wind of fifteen knots or more.', measure: c => { const s = c.sails.find(s => s.windKn >= 15); return s ? { value: 1, sail: s, note: Math.round(s.windKn) + ' knots' } : null; } },
+    { id: 'lifesaver', name: 'Lifesaver', shape: 'jib', color: '#ef5350', for: 'Practiced the man overboard drill and logged it.', measure: c => c.drills.mob ? { value: 1, note: c.drills.mob } : null },
+    { id: 'drillmaster', name: 'Drillmaster', shape: 'genoa', color: '#ab47bc', for: 'All four drills practiced and logged.', measure: c => c.drills.all ? { value: 1 } : null },
+    { id: 'tour', name: 'Grand Tour', shape: 'spinnaker', color: '#7e57c2', secret: true, for: 'One sail that touched the marina, the dam, Liebers Point, the north arm and the south arm.', measure: c => { const s = c.sails.find(s => s.places.size >= 5); return s ? { value: 1, sail: s } : null; } },
+    { id: 'owl', name: 'Night Owl', shape: 'main', color: '#3949ab', secret: true, for: 'A sail that came in after eight in the evening.', measure: c => { const s = c.sails.find(s => s.endHour >= 20); return s ? { value: 1, sail: s } : null; } },
+    { id: 'thanks', name: 'Thanksgiving Sail', shape: 'spinnaker', color: '#d4a017', secret: true, for: 'A sail in late November, when most boats are already on the hard.', measure: c => { const s = c.sails.find(s => s.month >= 11 && s.day >= 20); return s ? { value: 1, sail: s } : null; } }
+  ];
+  // month names in the sail's own time zone
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  function sailParts(ms) { const p = new Intl.DateTimeFormat('en-US', { timeZone: TZ, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', hour12: false }).formatToParts(new Date(ms)); const g = k => +p.find(x => x.type === k).value; return { y: g('year'), m: g('month'), d: g('day'), h: g('hour') % 24 }; }
+  function bestGroup(groups, val, label) { let best = null; Object.values(groups).forEach(g => { const v = val(g); if (!best || v > best.value) best = { value: v, note: label(g), sail: g.sails[g.sails.length - 1] }; }); return best; }
+  function bestSail(c, val) { let best = null; c.sails.forEach(s => { const v = val(s); if (v != null && (!best || v > best.value)) best = { value: v, sail: s }; }); return best; }
+  function awardContext() {
+    const live = sails.filter(t => !t.deleted && t.pts && t.pts.length > 1).sort((a, b) => a.started - b.started);
+    const ss = live.map(t => { const a = analysisOf(t); const p = sailParts(t.started), e = sailParts(t.ended); return { t, a, nm: a.nm || 0, peak: a.peak10 ? a.peak10.kn : null, hours: (t.ended - t.started) / 3600e3, year: p.y, month: p.m, day: p.d, hour: p.h, endHour: e.h, windKn: t.wind ? t.wind.kn : null, places: new Set((a.visited || []).map(v => v.id)), label: t.name || (MONTHS[p.m - 1] + ' ' + p.d), dateLabel: MONTHS[p.m - 1] + ' ' + p.d + ', ' + p.y }; });
+    const byMonth = {}, bySeason = {}, byDay = {};
+    ss.forEach(s => { const mk = s.year + '-' + s.month, dk = mk + '-' + s.day, yk = String(s.year);
+      (byMonth[mk] = byMonth[mk] || { n: 0, nm: 0, sails: [], label: MONTHS[s.month - 1] + ' ' + s.year }); byMonth[mk].n++; byMonth[mk].nm += s.nm; byMonth[mk].sails.push(s);
+      (bySeason[yk] = bySeason[yk] || { n: 0, nm: 0, sails: [], label: 'the ' + s.year + ' season' }); bySeason[yk].n++; bySeason[yk].nm += s.nm; bySeason[yk].sails.push(s);
+      (byDay[dk] = byDay[dk] || { n: 0, sails: [], label: s.dateLabel }); byDay[dk].n++; byDay[dk].sails.push(s); });
+    const dl = (drillLog || []).filter(d => !d.deleted); const done = new Set(dl.map(d => d.drill)); const mob = dl.filter(d => d.drill === 'mob').sort((a, b) => a.at - b.at)[0];
+    return { sails: ss, byMonth, bySeason, byDay, drills: { mob: mob ? 'first logged ' + sailParts(mob.at).m + '/' + sailParts(mob.at).d + '/' + sailParts(mob.at).y : null, all: ['mob', 'heave', 'reef', 'dock'].every(k => done.has(k)) } };
+  }
+  // -> [{aw, earned, tier (0..n-1 or -1), tierName, value, sail, note, next: {label, v, have}}]
+  const SEASON_COLORS = { 12: '#bfe3ff', 1: '#bfe3ff', 2: '#bfe3ff', 3: '#9ccc65', 4: '#9ccc65', 5: '#9ccc65', 6: '#4fc3f7', 7: '#4fc3f7', 8: '#4fc3f7', 9: '#ffb74d', 10: '#ff8f3f', 11: '#a1887f' };
+  function monthAwards(c) { return Object.keys(c.byMonth).sort().map(k => { const g = c.byMonth[k]; const m = g.sails[0].month; return { id: 'month-' + k, name: MONTHS[m - 1] + ' Sailor', shape: 'jib', color: SEASON_COLORS[m], for: 'Went sailing in ' + g.label + '.', measure: () => ({ value: 1, sail: g.sails[0], note: g.n + (g.n === 1 ? ' sail' : ' sails') + ' that month' }) }; }); }
+  function computeAwards() {
+    const c = awardContext();
+    return AWARDS.concat(monthAwards(c)).map(aw => { let m = null; try { m = aw.measure(c); } catch (e) { m = null; }
+      if (aw.tiers) { let tier = -1; aw.tiers.forEach((t, i) => { if (m && m.value >= t.v) tier = i; }); const next = tier < aw.tiers.length - 1 ? { label: aw.tiers[tier + 1].label, v: aw.tiers[tier + 1].v, have: m ? m.value : 0 } : null;
+        return { aw, earned: tier >= 0, tier, tierName: tier >= 0 ? TIER_NAMES[tier] : null, tierLabel: tier >= 0 ? aw.tiers[tier].label : null, value: m ? m.value : 0, sail: m && m.sail, note: m && m.note, next, key: aw.id + ':' + tier }; }
+      return { aw, earned: !!m, tier: m ? 0 : -1, tierName: null, tierLabel: null, value: m ? m.value : 0, sail: m && m.sail, note: m && m.note, next: null, key: aw.id + ':' + (m ? 0 : -1) }; });
+  }
+  function awardColor(r) { return r.aw.tiers ? (r.earned ? TIER_COLORS[r.tierName] : '#8a97a3') : r.aw.color; }
+  function shade(hex, f) { const n = parseInt(hex.slice(1), 16); const ch = s => Math.max(0, Math.min(255, Math.round(((n >> s) & 255) * f))); return `rgb(${ch(16)},${ch(8)},${ch(0)})`; }
+  function sailSVG(shape, color, size) {
+    const dark = shade(color, 0.6), lite = shade(color, 1.15); const seam = 'rgba(0,0,0,.18)';
+    let body = '';
+    if (shape === 'main') body = `<line x1="18" y1="4" x2="18" y2="114" stroke="#777" stroke-width="2.5"/><line x1="18" y1="108" x2="96" y2="108" stroke="#777" stroke-width="2.5"/><path d="M22 8 L22 106 L92 106 Q84 52 22 8 Z" fill="${color}" stroke="${dark}" stroke-width="1.5"/><path d="M22 40 L58 40 M22 62 L72 62 M22 84 L82 84" stroke="${seam}" stroke-width="1.5"/>`;
+    else if (shape === 'jib') body = `<line x1="64" y1="4" x2="12" y2="112" stroke="#777" stroke-width="2"/><path d="M62 10 L16 106 Q50 102 88 100 Q86 46 62 10 Z" fill="${color}" stroke="${dark}" stroke-width="1.5"/><path d="M48 40 L72 42 M38 62 L80 64 M26 86 L84 86" stroke="${seam}" stroke-width="1.5"/>`;
+    else if (shape === 'genoa') body = `<line x1="70" y1="2" x2="6" y2="114" stroke="#777" stroke-width="2"/><path d="M68 6 L10 110 Q54 106 97 104 Q94 42 68 6 Z" fill="${color}" stroke="${dark}" stroke-width="1.5"/><path d="M54 34 L78 36 M42 58 L88 60 M30 82 L94 84 M20 100 L96 100" stroke="${seam}" stroke-width="1.5"/>`;
+    else body = `<path d="M50 6 Q8 36 12 110 Q50 98 88 110 Q92 36 50 6 Z" fill="${color}" stroke="${dark}" stroke-width="1.5"/><path d="M50 6 Q36 60 30 108 M50 6 Q64 60 70 108" stroke="${seam}" stroke-width="1.5" fill="none"/><path d="M50 6 Q22 40 20 100" stroke="${lite}" stroke-width="3" fill="none" opacity=".5"/>`;
+    return `<svg viewBox="0 0 100 120" width="${size}" height="${size * 1.2}" aria-hidden="true">${body}</svg>`;
+  }
+  let awardsSeen = store.get('awardsSeen', null);
+  function renderAwards() {
+    const rs = computeAwards(); const earned = rs.filter(r => r.earned); const strip = $('#awardstrip');
+    if (awardsSeen === null) awardsSeen = [];
+    const fresh = earned.filter(r => !awardsSeen.includes(r.key));
+    $('#awards-sub').textContent = earned.length ? `${earned.length} of ${rs.length} Sails earned. Tap one to turn it over.` : 'No Sails yet. Record a sail and the first one is yours.';
+    const nb = $('#awards-new'); if (fresh.length) { nb.classList.remove('hidden'); nb.innerHTML = `<b>New Sail${fresh.length > 1 ? 's' : ''}:</b> ${fresh.map(r => `<button class="linkbtn" data-aw="${r.aw.id}">${esc(r.aw.name)}</button>`).join(', ')}`; } else nb.classList.add('hidden');
+    strip.innerHTML = (earned.length ? earned : rs.slice(0, 4)).map(r => awardTile(r)).join('');
+    document.querySelectorAll('[data-aw]').forEach(el => el.addEventListener('click', () => openAward(el.dataset.aw)));
+    return fresh;
+  }
+  function awardTile(r) { const secret = r.aw.secret && !r.earned; return `<div class="award ${r.earned ? '' : 'locked'}" data-aw="${r.aw.id}">${secret ? '<div class="secret">?</div>' : sailSVG(r.aw.shape, awardColor(r), 64)}<div class="nm">${secret ? 'Secret Sail' : esc(r.aw.name)}</div>${r.earned && r.tierLabel ? `<div class="tier ${r.tierName}">${r.tierName}</div>` : ''}</div>`; }
+  function openWall() {
+    const rs = computeAwards(); awardsSeen = rs.filter(r => r.earned).map(r => r.key); store.set('awardsSeen', awardsSeen); $('#awards-new').classList.add('hidden');
+    const box = $('#rsheet-box'); $('#rsheet').classList.remove('hidden');
+    box.innerHTML = `<h2>The Sail wall</h2><div class="small muted" style="margin-bottom:8px">Earned by the boat, so both phones see the same wall. Grey sails are still to earn; tap any of them to see how close you are.</div><div class="awardgrid">${rs.map(r => awardTile(r)).join('')}</div><div class="toolbar" style="margin-top:12px"><button class="btn" id="aw-close">Close</button></div>`;
+    box.querySelectorAll('[data-aw]').forEach(el => el.addEventListener('click', () => openAward(el.dataset.aw, true)));
+    box.querySelector('#aw-close').addEventListener('click', closeRouteSheet);
+  }
+  function openAward(id, fromWall) {
+    const r = computeAwards().find(x => x.aw.id === id); if (!r) return; const aw = r.aw;
+    if (!awardsSeen.includes(r.key) && r.earned) { awardsSeen.push(r.key); store.set('awardsSeen', awardsSeen); }
+    const secret = aw.secret && !r.earned; const color = awardColor(r);
+    const box = $('#rsheet-box'); $('#rsheet').classList.remove('hidden');
+    const earnedLine = r.earned ? `Earned ${r.sail ? r.sail.dateLabel : ''}${r.sail && r.sail.t.name ? ', "' + esc(r.sail.t.name) + '"' : ''}` : '';
+    const valueLine = r.earned && aw.tiers ? `${aw.unit === 'h' ? r.value.toFixed(1) + ' hours' : aw.unit === 'kn' ? r.value.toFixed(1) + ' knots' : aw.unit === 'nm' ? r.value.toFixed(1) + ' nm' : r.value + ' sails'}${r.note ? ', ' + esc(r.note) : ''}` : (r.note ? esc(r.note) : '');
+    const progress = !secret && r.next ? `<div class="small muted" style="margin-top:10px">Next: ${esc(r.next.label)}. ${aw.unit === 'h' ? r.next.have.toFixed(1) : aw.unit === 'sails' ? r.next.have : r.next.have.toFixed(1)} of ${r.next.v} so far.</div><div class="pbar"><i style="width:${Math.min(100, 100 * r.next.have / r.next.v).toFixed(0)}%"></i></div>` : (!r.earned && !secret ? `<div class="small muted" style="margin-top:10px">Not yet. ${esc(aw.for)}</div>` : '');
+    box.innerHTML = `<div class="flip" id="flip"><div class="inner" id="flip-inner">
+        <div class="face front" style="${r.earned ? '' : 'filter:grayscale(1);opacity:.6'}">${secret ? '<div class="secret big">?</div>' : sailSVG(aw.shape, color, 150)}<div class="fname">${secret ? 'Secret Sail' : esc(aw.name)}</div>${r.earned && r.tierLabel ? `<div class="tier ${r.tierName}">${r.tierName} · ${esc(r.tierLabel)}</div>` : ''}</div>
+        <div class="face back"><div class="engr"><div class="etitle">${secret ? 'Secret Sail' : esc(aw.name)}</div><div class="eline">${secret ? 'Earn it to read the engraving.' : esc(aw.for)}</div>${r.earned ? `${r.tierLabel ? `<div class="eline" style="margin-top:14px">${r.tierName.charAt(0).toUpperCase() + r.tierName.slice(1)}: ${esc(r.tierLabel)}</div>` : ''}<div class="eline"${r.tierLabel ? '' : ' style="margin-top:14px"'}>${valueLine}</div><div class="eline">${earnedLine}</div><div class="eline small" style="margin-top:14px">Buen Camino · Branched Oak Lake</div>` : (!secret ? `<div class="eline" style="margin-top:14px">Still to earn.</div>` : '')}</div></div>
+      </div></div>
+      <div class="small muted" style="text-align:center">Drag to spin, tap to flip.</div>${progress}
+      <div class="toolbar" style="margin-top:12px">${fromWall ? '<button class="btn" id="aw-back">Back to the wall</button>' : ''}<button class="btn" id="aw-close">Close</button></div>`;
+    const flip = box.querySelector('#flip'), inner = box.querySelector('#flip-inner'); let ang = 0, startX = null, startAng = 0, moved = false;
+    const set = a => { inner.style.transform = `rotateY(${a}deg)`; };
+    flip.addEventListener('pointerdown', e => { startX = e.clientX; startAng = ang; moved = false; flip.classList.add('drag'); flip.setPointerCapture(e.pointerId); });
+    flip.addEventListener('pointermove', e => { if (startX == null) return; const dx = e.clientX - startX; if (Math.abs(dx) > 4) moved = true; ang = startAng + dx * 0.8; set(ang); });
+    const end = () => { if (startX == null) return; flip.classList.remove('drag'); if (!moved) ang = Math.round(ang / 180) * 180 + 180; else ang = Math.round(ang / 180) * 180; set(ang); startX = null; };
+    flip.addEventListener('pointerup', end); flip.addEventListener('pointercancel', end);
+    box.querySelector('#aw-close').addEventListener('click', () => { closeRouteSheet(); renderAwards(); });
+    const bk = box.querySelector('#aw-back'); if (bk) bk.addEventListener('click', openWall);
+    setTimeout(() => { if (r.earned && !fromWall) { ang = 360; set(ang); } }, 80);
+  }
+  $('#btn-awards').addEventListener('click', openWall);
+
   /* ---------- Marks ---------- */
   let marks = (store.get('marks', []) || []).map(m => ({ ...m, id: String(m.id), kind: m.kind || 'mark', updated: m.updated || m.at || Date.now(), deleted: !!m.deleted, by: m.by || '' }));
   const places = () => marks.filter(m => !m.deleted && m.kind === 'place');
@@ -929,7 +1066,7 @@ const SA = (() => {
   $('#nudge-cancel').addEventListener('click', () => endNudge(false));
 
   function renderMarks() {
-    renderTracks(); renderSyncStatus(); const el = $('#marks-list'); const live = liveMarks();
+    renderTracks(); renderSyncStatus(); try { renderAwards(); } catch (e) { console.warn('awards', e); } const el = $('#marks-list'); const live = liveMarks();
     if (!live.length) { el.innerHTML = '<span class="muted">No marks yet. On the map, tap the pin button or press and hold on the water.</span>'; return; }
     el.innerHTML = live.map(m => `<div class="markitem"><div class="name">${esc(m.name)}${m.kind === 'place' ? ' <span class="small muted">place</span>' : ''}</div>${m.note ? `<div class="note">${esc(m.note)}</div>` : ''}${m.story ? `<div class="story clamp" data-story="${m.id}">${esc(m.story)}</div><button class="linkbtn" data-more="${m.id}">Read more</button>` : ''}<div class="small muted">${m.lat.toFixed(5)}, ${m.lon.toFixed(5)} · ${new Date(m.at).toLocaleDateString()}${m.by ? ' · ' + esc(m.by) : ''}</div>
       <div class="toolbar"><button class="btn sm" data-go="${m.id}">Show</button><button class="btn sm" data-edit="${m.id}">Edit</button><button class="btn sm" data-nudge="${m.id}">Nudge</button><button class="btn sm danger" data-del="${m.id}">Delete</button></div></div>`).join('');
