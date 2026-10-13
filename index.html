@@ -307,10 +307,28 @@ const SA = (() => {
   function dist(a, b) { const R = 6371000, p1 = toRad(a.lat), p2 = toRad(b.lat), dp = p2 - p1, dl = toRad(b.lon - a.lon); const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); }
   function bearing(a, b) { const p1 = toRad(a.lat), p2 = toRad(b.lat), dl = toRad(b.lon - a.lon); const y = Math.sin(dl) * Math.cos(p2), x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl); return (toDeg(Math.atan2(y, x)) + 360) % 360; }
   const compass = deg => ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(deg / 22.5) % 16];
+  const compassWord = deg => ({ N: 'north', NNE: 'north northeast', NE: 'northeast', ENE: 'east northeast', E: 'east', ESE: 'east southeast', SE: 'southeast', SSE: 'south southeast', S: 'south', SSW: 'south southwest', SW: 'southwest', WSW: 'west southwest', W: 'west', WNW: 'west northwest', NW: 'northwest', NNW: 'north northwest' })[compass(deg)];
   const meanHeading = hs => { let x = 0, y = 0; hs.forEach(h => { x += Math.cos(toRad(h)); y += Math.sin(toRad(h)); }); return (toDeg(Math.atan2(y, x)) + 360) % 360; };
   const angDiff = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
   function pointOfSail(angle) { if (angle < 38) return 'too close to the wind'; if (angle < 55) return 'close hauled'; if (angle < 78) return 'close reach'; if (angle < 105) return 'beam reach'; if (angle < 160) return 'broad reach'; return 'run'; }
   function tackAndPos(brg, windFrom) { const rel = ((windFrom - brg) % 360 + 360) % 360; const angle = rel > 180 ? 360 - rel : rel; return { tack: rel > 0 && rel < 180 ? 'starboard' : 'port', pos: pointOfSail(angle), angle }; }
+
+  // Named places on Branched Oak Lake. Marina and Liebers Point are circles; the arms and the dam are simple regions; anything else is the main lake.
+  const PLACES = {
+    marina: { lat: 40.9800, lon: -96.8540, r: 350, name: 'the marina' },
+    liebers: { lat: 40.9722, lon: -96.8709, r: 450, name: 'Liebers Point' }
+  };
+  function place(lat, lon) {
+    if (dist({ lat, lon }, PLACES.marina) < PLACES.marina.r) return { id: 'marina', name: 'the marina' };
+    if (dist({ lat, lon }, PLACES.liebers) < PLACES.liebers.r) return { id: 'liebers', name: 'Liebers Point' };
+    if (lon > -96.858 && lat > 40.969 && lat < 40.987) return { id: 'dam', name: 'the dam' };
+    if ((lon < -96.868 && lat > 40.9765) || (lon < -96.879 && lat > 40.973)) return { id: 'north', name: 'the north arm' };
+    if ((lon < -96.868 && lat < 40.9715) || lon < -96.879) return { id: 'south', name: 'the south arm' };
+    return { id: 'main', name: 'the main lake' };
+  }
+  // "in the south arm", "off the dam", "at the marina", "off Liebers Point"
+  const inPlace = p => ({ marina: 'at the marina', liebers: 'off Liebers Point', dam: 'off the dam', north: 'in the north arm', south: 'in the south arm', main: 'out on the main lake' })[p.id];
+  const toPlace = p => ({ marina: 'toward the marina', liebers: 'toward Liebers Point', dam: 'toward the dam', north: 'up the north arm', south: 'into the south arm', main: 'out onto the main lake' })[p.id];
 
   // pts: [{lat, lon, t(ms)}]. Returns a rich analysis object.
   function analyze(pts) {
@@ -320,13 +338,13 @@ const SA = (() => {
     out.start = pts[0].t; out.end = pts[pts.length - 1].t; out.minutes = (out.end - out.start) / 60000;
     // segments at gaps > 6 s
     const segs = [[pts[0]]]; const gaps = [];
-    for (let i = 1; i < pts.length; i++) { const g = (pts[i].t - pts[i - 1].t) / 1000; if (g > 6) { segs.push([]); if (g > 20) gaps.push({ from: pts[i - 1].t, to: pts[i].t, sec: g }); } segs[segs.length - 1].push(pts[i]); }
+    for (let i = 1; i < pts.length; i++) { const g = (pts[i].t - pts[i - 1].t) / 1000; if (g > 6) { segs.push([]); if (g > 20) gaps.push({ from: pts[i - 1].t, to: pts[i].t, sec: g, lat: pts[i - 1].lat, lon: pts[i - 1].lon }); } segs[segs.length - 1].push(pts[i]); }
     out.gaps = gaps;
     // distance (inside segments only, so a jump across a gap does not count)
     let total = 0; segs.forEach(s => { for (let i = 1; i < s.length; i++) total += dist(s[i - 1], s[i]); }); out.nm = total / 1852;
     // per point speed and heading over a 10 s trailing window inside its segment
     const samples = [];
-    segs.forEach(s => { for (let i = 1; i < s.length; i++) { let j = i; while (j > 0 && (s[i].t - s[j].t) < 10000) j--; const dt = (s[i].t - s[j].t) / 1000; if (dt < 4) continue; const d = dist(s[j], s[i]); samples.push({ t: s[i].t, kn: d / dt * 1.94384, hdg: bearing(s[j], s[i]), lat: s[i].lat, lon: s[i].lon, seg: s }); } });
+    segs.forEach(s => { for (let i = 1; i < s.length; i++) { let j = i; while (j > 0 && (s[i].t - s[j].t) < 10000) j--; const dt = (s[i].t - s[j].t) / 1000; if (dt < 4) continue; const d = dist(s[j], s[i]); samples.push({ t: s[i].t, kn: d / dt * 1.94384, hdg: bearing(s[j], s[i]), lat: s[i].lat, lon: s[i].lon }); } });
     out.samples = samples;
     const moving = samples.filter(x => x.kn > 0.8);
     out.avgKn = out.minutes > 0 ? out.nm / (out.minutes / 60) : 0;
@@ -348,8 +366,14 @@ const SA = (() => {
     }
     if (cur) legs.push(cur);
     // merge tiny legs (< 40 s) into neighbours, then describe
-    const merged = []; legs.forEach(l => { const dur = (l.to - l.from) / 1000; if (dur < 40 && merged.length) { const m = merged[merged.length - 1]; m.pts = m.pts.concat(l.pts); m.to = l.to; } else merged.push(l); });
-    out.legs = merged.map(l => { const hs = l.pts.map(x => x.hdg); const kns = l.pts.map(x => x.kn); let d = 0; for (let i = 1; i < l.pts.length; i++) d += dist(l.pts[i - 1], l.pts[i]); return { from: l.from, to: l.to, min: (l.to - l.from) / 60000, hdg: meanHeading(hs), kn: kns.reduce((a, b) => a + b, 0) / kns.length, maxKn: Math.max(...kns), nm: d / 1852, slow: l.slow }; }).filter(l => l.min >= 0.5);
+    const merged = []; legs.forEach(l => { const dur = (l.to - l.from) / 1000; if (dur < 40 && merged.length) { const m = merged[merged.length - 1]; if (l.from - m.to <= 20000) { m.pts = m.pts.concat(l.pts); m.to = l.to; } } else merged.push(l); });
+    const describe = l => { const hs = l.pts.map(x => x.hdg); const kns = l.pts.map(x => x.kn); let d = 0; for (let i = 1; i < l.pts.length; i++) d += dist(l.pts[i - 1], l.pts[i]); const a = l.pts[0], z = l.pts[l.pts.length - 1], m = l.pts[Math.floor(l.pts.length / 2)]; return { from: l.from, to: l.to, min: (l.to - l.from) / 60000, hdg: meanHeading(hs), kn: kns.reduce((a, b) => a + b, 0) / kns.length, maxKn: Math.max(...kns), nm: d / 1852, slow: l.slow, start: { lat: a.lat, lon: a.lon }, mid: { lat: m.lat, lon: m.lon }, end: { lat: z.lat, lon: z.lon }, pts: l.pts }; };
+    out.legs = merged.map(describe).filter(l => l.min >= 0.5);
+    // chapters: the legs reduced to at most 8 by folding the shortest into a neighbour, so the story stays readable
+    let ch = out.legs.map(l => ({ ...l, pts: l.pts }));
+    while (ch.length > 8) { let k = 0; for (let i = 1; i < ch.length; i++) if (ch[i].min < ch[k].min) k = i; const j = k > 0 && (k === ch.length - 1 || ch[k - 1].min <= ch[k + 1].min) ? k - 1 : k + 1; const a = ch[Math.min(j, k)], b = ch[Math.max(j, k)]; const f = describe({ from: a.from, to: b.to, pts: a.pts.concat(b.pts), slow: a.slow && b.slow }); ch.splice(Math.min(j, k), 2, f); }
+    out.chapters = ch.map(l => { const o = { ...l }; delete o.pts; return o; });
+    out.legs = out.legs.map(l => { const o = { ...l }; delete o.pts; return o; });
     // slowest spell while underway (longest slow leg)
     out.slowest = out.legs.filter(l => l.slow).sort((a, b) => b.min - a.min)[0] || null;
     out.longest = out.legs.filter(l => !l.slow).sort((a, b) => b.nm - a.nm)[0] || null;
@@ -357,54 +381,112 @@ const SA = (() => {
     const lats = pts.map(p => p.lat), lons = pts.map(p => p.lon);
     out.extentNm = { ns: dist({ lat: Math.min(...lats), lon: lons[0] }, { lat: Math.max(...lats), lon: lons[0] }) / 1852, ew: dist({ lat: lats[0], lon: Math.min(...lons) }, { lat: lats[0], lon: Math.max(...lons) }) / 1852 };
     out.startFinishNm = dist(pts[0], pts[pts.length - 1]) / 1852; out.startFinishBrg = bearing(pts[0], pts[pts.length - 1]);
+    out.startPlace = place(pts[0].lat, pts[0].lon); out.endPlace = place(pts[pts.length - 1].lat, pts[pts.length - 1].lon);
+    // places visited, in order, with the time spent in each
+    const visited = []; pts.forEach((p, i) => { const pl = place(p.lat, p.lon); const last = visited[visited.length - 1]; const dt = i ? Math.min(60000, p.t - pts[i - 1].t) : 0; if (last && last.id === pl.id) last.ms += dt; else visited.push({ id: pl.id, name: pl.name, ms: dt, at: p.t }); });
+    out.visited = visited.filter(v => v.ms > 90000);
+    out.offLake = out.visited.length === 0 && dist(pts[0], { lat: 40.975, lon: -96.868 }) > 6000;
     return out;
   }
 
   const fmtT = (ms, tz) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz });
-  // wind: {from, kn, gust} or null. Returns plain text with blank lines between paragraphs.
+  // When in the sail a moment fell, as words. Alternates so consecutive sentences do not all start the same way.
+  function when(a, ms, alt) {
+    const f = (ms - a.start) / Math.max(1, a.end - a.start);
+    const bands = [
+      [0.12, ['As the sail began', 'Right at the start', 'Leaving the start']],
+      [0.35, ['Early in the sail', 'Early on', 'In the first stretch']],
+      [0.65, ['Toward the middle of the sail', 'Around the middle of the sail', 'Midway through']],
+      [0.88, ['Later in the sail', 'Later on', 'In the back half']],
+      [9, ['As the sail wound down', 'Near the end', 'Coming to the finish']]
+    ];
+    const band = bands.find(b => f < b[0])[1]; return band[(alt || 0) % band.length];
+  }
+  const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  const endDot = s => /[.!?"'”]$/.test(s) ? s : s + '.';
+  const tidy = s => endDot(cap(String(s || '').trim()));
+
+  // wind: {from, kn, gust} or null. qa: [{id, q, a}] answers to weave in. Returns plain text with blank lines between paragraphs.
   function story(a, opts) {
-    opts = opts || {}; const tz = opts.tz; const w = opts.wind;
+    opts = opts || {}; const tz = opts.tz; const w = opts.wind; const qa = opts.qa || [];
+    const ans = id => { const x = qa.find(q => q.id === id && q.a && q.a.trim()); return x ? ' ' + tidy(x.a) : ''; };
     if (!a || a.n < 2) return 'Too short a track to describe.';
     const P = [];
     const day = new Date(a.start).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', timeZone: tz });
     P.push(`${day}, ${fmtT(a.start, tz)} to ${fmtT(a.end, tz)}, ${Math.round(a.minutes)} minutes. ${a.nm.toFixed(1)} nautical miles (${(a.nm * 1.1508).toFixed(1)} statute), averaging ${a.avgMovingKn.toFixed(1)} knots while moving.` +
-      (a.peak10 ? ` Top speed ${a.peak10.kn.toFixed(1)} knots at ${fmtT(a.peak10.t, tz)} heading ${compass(a.peak10.hdg)}` + (a.peak30 ? `, with ${a.peak30.kn.toFixed(1)} held over half a minute at ${fmtT(a.peak30.t, tz)}.` : '.') : '') +
+      (a.peak10 ? ` Top speed ${a.peak10.kn.toFixed(1)} knots` + (a.peak30 ? `, with ${a.peak30.kn.toFixed(1)} held over half a minute.` : '.') : '') +
       (a.peak10 && a.peak10.kn >= 5.6 ? ' That is at or near hull speed for a Catalina 22.' : ''));
-    if (w && w.from != null) P.push(`Wind was from the ${compass(w.from)} at about ${Math.round(w.kn)} knots` + (w.gust ? `, gusting ${Math.round(w.gust)}` : '') + '.');
-    const legs = a.legs || [];
-    if (legs.length) {
-      const lines = legs.map(l => {
-        const t = `${fmtT(l.from, tz)} to ${fmtT(l.to, tz)}`;
-        if (l.slow) return `${t}: slow, under 1.5 knots, ${l.min.toFixed(0)} min. A turn, a sail change, a lull, or motoring in close.`;
-        let pos = '';
-        if (w && w.from != null) { const tp = tackAndPos(l.hdg, w.from); pos = tp.pos === 'too close to the wind' ? ', pointed into the wind' : `, ${tp.tack} tack ${tp.pos}`; }
-        return `${t}: ${compass(l.hdg)} (${Math.round(l.hdg)}) at ${l.kn.toFixed(1)} knots, peak ${l.maxKn.toFixed(1)}, ${l.nm.toFixed(2)} nm${pos}.`;
-      });
-      P.push('How it unfolded.\n' + lines.join('\n'));
+    if (w && w.from != null) P.push(`Wind was from the ${compassWord(w.from)} at about ${Math.round(w.kn)} knots` + (w.gust ? `, gusting ${Math.round(w.gust)}` : '') + '.');
+    // where the sail went
+    const vis = (a.visited || []).map(v => v.name); const uniq = vis.filter((v, i) => vis.indexOf(v) === i);
+    if (a.offLake) P.push('This sail was recorded away from Branched Oak Lake.');
+    else if (uniq.length > 1) P.push(`We started ${inPlace(a.startPlace)} and the sail took us through ${uniq.slice(1).join(', ').replace(/, ([^,]*)$/, ' and $1')}.`);
+    else if (uniq.length === 1) P.push(`The whole sail stayed ${inPlace(a.visited[0])}.`);
+    // the sail as chapters
+    const chapters = a.chapters || []; const peakT = a.peak10 ? a.peak10.t : null; const longest = a.longest;
+    // fold runs of three or more back-and-forth legs in one place into a single "worked back and forth" chapter
+    const ch = []; let i0 = 0;
+    while (i0 < chapters.length) {
+      let j = i0; const pid = place(chapters[i0].mid.lat, chapters[i0].mid.lon).id;
+      while (j + 1 < chapters.length && !chapters[j + 1].slow && !chapters[i0].slow && place(chapters[j + 1].mid.lat, chapters[j + 1].mid.lon).id === pid && angDiff(chapters[j + 1].hdg, chapters[j].hdg) > 90) j++;
+      if (j - i0 >= 2) { const grp = chapters.slice(i0, j + 1); const tot = grp.reduce((s, l) => s + l.min, 0); const kn = grp.reduce((s, l) => s + l.kn * l.min, 0) / tot; ch.push({ group: grp, from: grp[0].from, to: grp[grp.length - 1].to, min: tot, kn, maxKn: Math.max(...grp.map(l => l.maxKn)), start: grp[0].start, mid: grp[Math.floor(grp.length / 2)].mid, end: grp[grp.length - 1].end, slow: false, hdg: grp[0].hdg, hdg2: grp[1].hdg, nm: grp.reduce((s, l) => s + l.nm, 0) }); i0 = j + 1; }
+      else { ch.push(chapters[i0]); i0++; }
     }
-    if (a.gaps && a.gaps.length) P.push('Recording gaps: ' + a.gaps.map(g => `${fmtT(g.from, tz)} to ${fmtT(g.to, tz)} (${Math.round(g.sec / 60)} min)`).join(', ') + '. The phone stopped sending positions for those stretches, so distance and peaks may be understated.');
-    if (a.startFinishNm > 0.2) P.push(`Finished ${a.startFinishNm.toFixed(1)} nm ${compass(a.startFinishBrg)} of where the recording began, so it either started after leaving the slip or stopped before returning.`);
+    const verb = pos => ({ run: 'ran', 'broad reach': 'reached', 'beam reach': 'reached', 'close reach': 'reached', 'close hauled': 'beat' })[pos] || 'sailed';
+    let used = { peak: false, leg: false };
+    const gapsLeft = (a.gaps || []).slice();
+    ch.forEach((l, i) => {
+      const t0 = when(a, (l.from + l.to) / 2, i); const p1 = place(l.start.lat, l.start.lon), p2 = place(l.end.lat, l.end.lon);
+      let s;
+      if (l.slow) {
+        s = `${t0} we slowed to a near stop ${inPlace(place(l.mid.lat, l.mid.lon))} for about ${Math.max(1, Math.round(l.min))} minute${Math.round(l.min) === 1 ? '' : 's'}, a lull, a sail change, or motoring in close.`;
+        if (a.slowest && a.slowest.from >= l.from && a.slowest.from <= l.to) s += ans('slow');
+      } else if (l.group) {
+        let posTxt = '';
+        if (w && w.from != null) { const A = tackAndPos(l.hdg, w.from), B = tackAndPos(l.hdg2, w.from); const nm = tp => tp.pos === 'too close to the wind' ? 'pointed nearly into the wind' : `${tp.pos} on ${tp.tack} tack`; posTxt = `, ${nm(A)} one way and ${nm(B)} the other`; }
+        s = `${t0} we worked back and forth ${inPlace(p1)} for ${Math.round(l.min)} minutes, ${l.group.length} legs between ${compassWord(l.hdg)} and ${compassWord(l.hdg2)} at around ${l.kn.toFixed(1)} knots${posTxt}.`;
+      } else {
+        const where = p1.id === p2.id ? inPlace(p1) : `from ${p1.name} ${toPlace(p2)}`;
+        let pos = '', v = 'sailed';
+        if (w && w.from != null) { const tp = tackAndPos(l.hdg, w.from); pos = tp.pos === 'too close to the wind' ? ', pointed nearly into the wind' : ` on a ${tp.tack} tack ${tp.pos}`; v = verb(tp.pos); }
+        s = `${t0} we ${v} ${compassWord(l.hdg)} ${where}, making ${l.kn.toFixed(1)} knots${pos}` + (l.min >= 2 ? ` for ${Math.round(l.min)} minutes.` : '.');
+      }
+      if (!l.slow) {
+        if (peakT != null && peakT >= l.from - 15000 && peakT <= l.to + 15000 && !used.peak) { used.peak = true; s += ` That stretch held the fastest water of the day, ${a.peak10.kn.toFixed(1)} knots, ${when(a, peakT, 1).toLowerCase()}.` + ans('peak'); }
+        if (longest && longest.from >= l.from && longest.to <= l.to && !used.leg) { used.leg = true; if (ch.length > 1 && !l.group) s += ' It was the longest run of the sail.'; s += ans('leg'); }
+      }
+      // any recording gap that ended inside or right after this chapter
+      const next = ch[i + 1]; const limit = next ? next.from : a.end + 1;
+      while (gapsLeft.length && gapsLeft[0].to <= limit + 20000) { const g = gapsLeft.shift(); const mins = Math.round(g.sec / 60); s += ` The recording paused ${inPlace(place(g.lat, g.lon))} for about ${mins >= 1 ? mins + ' minute' + (mins === 1 ? '' : 's') : Math.round(g.sec) + ' seconds'}` + (g === a.gaps[0] ? ', so the distance and the peaks may be a little understated.' : '.') + (g === a.gaps[0] ? ans('gap') : ''); }
+      P.push(s);
+    });
+    gapsLeft.forEach(g => { const mins = Math.round(g.sec / 60); P.push(`The recording paused ${inPlace(place(g.lat, g.lon))} for about ${mins} minutes.` + (g === a.gaps[0] ? ans('gap') : '')); });
+    if (!used.peak && a.peak10) P.push(`Our fastest water was ${a.peak10.kn.toFixed(1)} knots, ${when(a, a.peak10.t, 1).toLowerCase()}, ${inPlace(place(a.peak10.lat, a.peak10.lon))}.` + ans('peak'));
+    if (!used.leg && ans('leg')) P.push(ans('leg').trim());
+    if (a.startFinishNm > 0.2) P.push(`The recording ended ${inPlace(a.endPlace)}, ${a.startFinishNm.toFixed(1)} nm ${compassWord(a.startFinishBrg)} of where it began, so it either started after leaving the slip or stopped before we were back.`);
+    if (ans('day')) P.push(ans('day').trim());
     return P.join('\n\n');
   }
 
-  // Interview questions drawn from the data: [{id, q}]
+  // Interview questions drawn from the data, in human terms: [{id, q}]
   function questions(a, opts) {
-    opts = opts || {}; const tz = opts.tz; const qs = [];
+    opts = opts || {}; const qs = [];
     if (!a || a.n < 2) return qs;
-    if (a.peak10) qs.push({ id: 'peak', q: `At ${fmtT(a.peak10.t, tz)} you hit ${a.peak10.kn.toFixed(1)} knots heading ${compass(a.peak10.hdg)}, your fastest of the day. What changed there, and what point of sail were you on?` });
-    if (a.longest) qs.push({ id: 'leg', q: `Your longest leg ran ${a.longest.nm.toFixed(2)} nm ${compass(a.longest.hdg)} from ${fmtT(a.longest.from, tz)} to ${fmtT(a.longest.to, tz)}. How did that leg feel, and how was the trim?` });
-    if (a.gaps && a.gaps.length) { const g = a.gaps[0]; qs.push({ id: 'gap', q: `The recording paused from ${fmtT(g.from, tz)} to ${fmtT(g.to, tz)}. What was happening on the boat then?` }); }
-    else if (a.slowest && a.slowest.min >= 2) qs.push({ id: 'slow', q: `You were nearly stopped for ${a.slowest.min.toFixed(0)} minutes around ${fmtT(a.slowest.from, tz)}. What was going on?` });
+    const dur = (a.end - a.start) / 1000;
+    if (a.peak10) qs.push({ id: 'peak', q: `${when(a, a.peak10.t, 0)} we hit our best speed of the day, ${a.peak10.kn.toFixed(1)} knots heading ${compassWord(a.peak10.hdg)} ${inPlace(place(a.peak10.lat, a.peak10.lon))}. What do you remember about that stretch? Who had the helm, and how did the boat feel?` });
+    if (a.longest && a.longest.min >= 3) qs.push({ id: 'leg', q: `Our longest run was ${when(a, (a.longest.from + a.longest.to) / 2, 1).toLowerCase()}, about ${Math.round(a.longest.min)} minutes heading ${compassWord(a.longest.hdg)} ${inPlace(place(a.longest.mid.lat, a.longest.mid.lon))}. How did that leg feel, and how was the trim?` });
+    if (a.gaps && a.gaps.length) { const g = a.gaps[0]; const mins = Math.round(g.sec / 60); const big = g.sec > dur * 0.4; qs.push({ id: 'gap', q: big ? `The recording paused ${inPlace(place(g.lat, g.lon))} for most of the sail, about ${mins} minutes. What happened out there while the phone was quiet?` : `${when(a, g.from, 2)} the recording paused ${inPlace(place(g.lat, g.lon))} for about ${mins} minute${mins === 1 ? '' : 's'}. What was happening on the boat then?` }); }
+    else if (a.slowest && a.slowest.min >= 2) qs.push({ id: 'slow', q: `${when(a, a.slowest.from, 2)} we slowed and nearly stopped ${inPlace(place(a.slowest.mid.lat, a.slowest.mid.lon))} for about ${Math.round(a.slowest.min)} minutes. Were we drifting, changing sails, or motoring?` });
     qs.push({ id: 'day', q: 'What is the one thing about this sail you want to remember?' });
     return qs.slice(0, 4);
   }
-  return { analyze, story, questions, compass, dist, bearing, tackAndPos };
+  return { analyze, story, questions, compass, compassWord, dist, bearing, tackAndPos, place, when };
 })();
 </script>
 <script>
 (function () {
   'use strict';
-  const APP_VERSION = '5.0';
+  const APP_VERSION = '5.1';
   const LAKE = { lat: 40.975, lon: -96.870, zoom: 14 };
   const DRAFT_FT = 2.5;
   const CONTOUR_URL = "https://services5.arcgis.com/IOshH1zLrIieqrNk/arcgis/rest/services/LakeContours/FeatureServer/0/query"
@@ -599,7 +681,8 @@ const SA = (() => {
       h.time.forEach((t, i) => { const dd = Math.abs(new Date(t + ':00-05:00').getTime() - ms); if (dd < bd) { bd = dd; best = i; } });
       return { from: h.wind_direction_10m[best], kn: h.wind_speed_10m[best], gust: h.wind_gusts_10m[best] }; } catch (e) { return null; }
   }
-  function writeAuto(t) { t.auto = SA.story(analysisOf(t), { tz: TZ, wind: t.wind }); }
+  function liveStory(t) { return SA.story(analysisOf(t), { tz: TZ, wind: t.wind, qa: t.qa || [] }); }
+  function writeAuto(t) { t.auto = liveStory(t); }
   function finishSail(pts, recovered) {
     const s = touch({ id: newId(), name: '', story: '', auto: '', qa: [], photos: [], wind: windNow(), pending: true, started: pts[0].t, ended: pts[pts.length - 1].t, pts, deleted: false, by: crewName(), recovered: !!recovered });
     writeAuto(s); sails.unshift(s); saveSails(); syncSoon(); return s;
@@ -614,7 +697,7 @@ const SA = (() => {
     const box = $('#rsheet-box'); const { t, qs } = iv; $('#rsheet').classList.remove('hidden');
     const later = () => { t.pending = true; touch(t); saveSails(); syncSoon(); closeRouteSheet(); renderTracks(); toast('Saved for later. A reminder is on the Log tab.'); };
     if (iv.i === -1) {
-      box.innerHTML = `<h2>${t.name ? esc(t.name) : 'Your sail'}</h2><div class="story" style="white-space:pre-wrap;font-size:14px;max-height:40vh;overflow:auto">${esc(t.auto || '')}</div>
+      box.innerHTML = `<h2>${t.name ? esc(t.name) : 'Your sail'}</h2><div class="story" style="white-space:pre-wrap;font-size:14px;max-height:40vh;overflow:auto">${esc(liveStory(t))}</div>
         <div class="small muted" style="margin-top:8px">${qs.length ? qs.length + ' question' + (qs.length > 1 ? 's' : '') + ' about this sail, then photos.' : 'No questions left; add photos if you have them.'}</div>
         <div class="toolbar" style="margin-top:12px"><button class="btn primary" id="iv-start">${qs.length ? 'Start the interview' : 'Add photos'}</button><button class="btn" id="iv-later">Later</button></div>`;
       box.querySelector('#iv-start').addEventListener('click', () => { iv.i = qs.length ? 0 : qs.length; renderInterview(); });
@@ -625,7 +708,7 @@ const SA = (() => {
       box.innerHTML = `<h2>Question ${iv.i + 1} of ${qs.length}</h2><p style="margin:6px 0 8px">${esc(q.q)}</p><textarea id="iv-a" placeholder="in your words"></textarea>
         <div class="toolbar" style="margin-top:12px"><button class="btn primary" id="iv-next">Next</button><button class="btn" id="iv-skip">Skip</button><button class="btn" id="iv-later">Later</button></div>`;
       setTimeout(() => box.querySelector('#iv-a').focus(), 50);
-      box.querySelector('#iv-next').addEventListener('click', () => { const a = box.querySelector('#iv-a').value.trim(); if (a) { t.qa = (t.qa || []).filter(x => x.id !== q.id); t.qa.push({ id: q.id, q: q.q, a }); touch(t); saveSails(); syncSoon(); } iv.i++; renderInterview(); });
+      box.querySelector('#iv-next').addEventListener('click', () => { const a = box.querySelector('#iv-a').value.trim(); if (a) { t.qa = (t.qa || []).filter(x => x.id !== q.id); t.qa.push({ id: q.id, q: q.q, a }); writeAuto(t); touch(t); saveSails(); syncSoon(); } iv.i++; renderInterview(); });
       box.querySelector('#iv-skip').addEventListener('click', () => { iv.i++; renderInterview(); });
       box.querySelector('#iv-later').addEventListener('click', later); return;
     }
@@ -682,11 +765,11 @@ const SA = (() => {
     if (!live.length) { el.innerHTML = '<span class="muted">No sails yet. Tap the record button on the map to start one.</span>'; return; }
     const pend = live.filter(t => t.pending);
     const banner = pend.length ? `<div class="pending"><b>Interview waiting:</b> ${pend.map(t => `<button class="linkbtn" data-iv="${t.id}">${t.name ? esc(t.name) : new Date(t.started).toLocaleDateString()}</button>`).join(', ')}</div>` : '';
-    el.innerHTML = banner + live.map(t => { const a = analysisOf(t); const full = (t.auto || '') + ((t.qa || []).length ? '\n\n' + t.qa.map(x => x.q + '\n' + x.a).join('\n\n') : '') + (t.story ? '\n\n' + t.story : '');
+    el.innerHTML = banner + live.map(t => { const a = analysisOf(t); const full = liveStory(t) + (t.story ? '\n\n' + t.story : '');
       return `<div class="markitem"><div class="name">${t.name ? esc(t.name) : new Date(t.started).toLocaleDateString()}${t.recovered ? ' <span class="warn small">(recovered)</span>' : ''}${t.pending ? ' <span class="warn small">(interview waiting)</span>' : ''}</div><div class="note">${new Date(t.started).toLocaleDateString()} ${fmtTime(new Date(t.started))} to ${fmtTime(new Date(t.ended))} · ${a.nm.toFixed(2)} nm · ${Math.round(a.minutes)} min · avg ${a.avgMovingKn.toFixed(1)} kn · max ${a.peak10 ? a.peak10.kn.toFixed(1) : '–'} kn${a.gaps && a.gaps.length ? ' · ' + a.gaps.length + ' gap' + (a.gaps.length > 1 ? 's' : '') : ''}${t.by ? ' · ' + esc(t.by) : ''}</div>
       ${full.trim() ? `<div class="story clamp" data-story="s${t.id}">${esc(full)}</div><button class="linkbtn" data-more="s${t.id}">Read more</button>` : ''}
       ${(t.photos || []).length ? `<div class="photos">${t.photos.map(p => `<img src="${p.data}" data-ph="${t.id}:${p.id}" alt="">`).join('')}</div>` : ''}
-      <div class="toolbar"><button class="btn sm primary" data-iv="${t.id}">${t.pending ? 'Interview' : (t.qa || []).length || (t.photos || []).length ? 'Add to story' : 'Interview'}</button><button class="btn sm" data-show="${t.id}">Show on map</button><button class="btn sm" data-sedit="${t.id}">Edit</button><button class="btn sm" data-auto="${t.id}">${t.auto ? 'Rewrite summary' : 'Write summary'}</button><button class="btn sm" data-gpx="${t.id}">Share GPX</button><button class="btn sm danger" data-del="${t.id}">Delete</button></div></div>`; }).join('');
+      <div class="toolbar"><button class="btn sm primary" data-iv="${t.id}">${t.pending ? 'Interview' : (t.qa || []).length || (t.photos || []).length ? 'Add to story' : 'Interview'}</button><button class="btn sm" data-show="${t.id}">Show on map</button><button class="btn sm" data-sedit="${t.id}">Edit</button><button class="btn sm" data-auto="${t.id}">${t.wind ? 'Rewrite summary' : 'Add wind to story'}</button><button class="btn sm" data-gpx="${t.id}">Share GPX</button><button class="btn sm danger" data-del="${t.id}">Delete</button></div></div>`; }).join('');
     el.querySelectorAll('[data-iv]').forEach(b => b.addEventListener('click', () => openInterview(sails.find(x => x.id == b.dataset.iv))));
     el.querySelectorAll('[data-ph]').forEach(im => im.addEventListener('click', () => { const [sid, pid] = im.dataset.ph.split(':'); viewPhoto(sails.find(x => x.id == sid), pid); }));
     el.querySelectorAll('[data-auto]').forEach(b => b.addEventListener('click', async () => { const t = sails.find(x => x.id == b.dataset.auto); b.textContent = 'Writing…'; if (!t.wind) t.wind = await windAt((t.started + t.ended) / 2); writeAuto(t); touch(t); saveSails(); syncSoon(); renderTracks(); toast('Summary written'); }));
