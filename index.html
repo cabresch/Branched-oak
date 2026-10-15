@@ -75,6 +75,22 @@
   .eline { font-size: 13px; line-height: 1.35; }
   .pbar { height: 6px; background: rgba(255,255,255,.1); border-radius: 3px; overflow: hidden; margin-top: 6px; }
   .pbar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 10px; padding: 8px 6px; text-align: center; }
+  .stat .v { font-size: 20px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  #btn-wp { position: absolute; left: 10px; top: 112px; z-index: 500; background: var(--accent); color: #1a1a1a; border: 1px solid var(--accent); border-radius: 10px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+  #btn-wp svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  #sailbar { position: absolute; left: 10px; top: 10px; z-index: 500; background: rgba(16,52,77,.94); border: 1px solid #5fd38d; border-radius: 14px; padding: 8px 12px; max-width: calc(100% - 74px); box-shadow: 0 2px 8px rgba(0,0,0,.35); display: flex; flex-direction: column; gap: 6px; }
+  #sb-head { cursor: pointer; }
+  #sb-name { font-size: 18px; font-weight: 700; line-height: 1.2; }
+  #sb-sub { font-size: 12px; color: var(--muted); }
+  #sb-story { font-size: 13px; line-height: 1.4; white-space: pre-wrap; max-height: 45vh; overflow: auto; border-top: 1px solid var(--line); padding-top: 6px; }
+  #sb-btns { display: flex; gap: 6px; }
+  .turnpop .leaflet-popup-content { margin: 8px 12px; font-size: 13px; }
+  .wp-opt { display: block; width: 100%; text-align: left; margin-bottom: 8px; }
+
   /* map overlays */
   .mapbtns { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 8px; z-index: 500; }
   .mapbtns button, .fab { background: rgba(16,52,77,.92); color: var(--text); border: 1px solid var(--line); border-radius: 10px; width: 44px; height: 44px; font-size: 13px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
@@ -195,6 +211,8 @@
     <section class="view active" id="view-map">
       <div id="map"></div>
       <canvas id="windcanvas"></canvas>
+      <button id="btn-wp" class="on hidden" title="Log a waypoint"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor" stroke="none"/></svg></button>
+      <div id="sailbar" class="hidden"><div id="sb-head"><div id="sb-name"></div><div id="sb-sub"></div></div><div id="sb-story" class="hidden"></div><div id="sb-btns"><button class="btn sm" id="sb-toggle">Show story</button><button class="btn sm" id="sb-close">Close sail</button></div></div>
       <div id="heelstrip" title="Heel-O-Meter"><div id="hs-num">–</div><div id="hs-txt"><div id="hs-zone">Heel-O-Meter</div><div id="hs-side">tap to start</div></div></div>
       <div class="mapbtns">
         <button id="btn-locate" title="Center on me"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
@@ -240,10 +258,12 @@
 
     <section class="view" id="view-marks">
       <div class="panel">
-        <h2>Sails</h2>
+        <h2>Sails: Awards Earned on the Water</h2>
         <div class="small muted" id="awards-sub"></div>
         <div id="awards-new" class="pending hidden"></div>
         <div class="card" style="padding:10px 6px 8px"><div class="awardstrip" id="awardstrip"></div><div class="toolbar" style="margin:6px 6px 0"><button class="btn sm" id="btn-awards">See the whole wall</button></div></div>
+        <h2 style="margin-top:18px">Season Stats</h2>
+        <div class="card" id="season-stats"><span class="muted">No sails yet.</span></div>
         <h2 style="margin-top:18px">Marks</h2>
         <div class="small" id="syncstatus"></div>
         <div class="toolbar">
@@ -410,6 +430,8 @@ const SA = (() => {
     const merged = []; legs.forEach(l => { const dur = (l.to - l.from) / 1000; if (dur < 40 && merged.length) { const m = merged[merged.length - 1]; if (l.from - m.to <= 20000) { m.pts = m.pts.concat(l.pts); m.to = l.to; } } else merged.push(l); });
     const describe = l => { const hs = l.pts.map(x => x.hdg); const kns = l.pts.map(x => x.kn); let d = 0; for (let i = 1; i < l.pts.length; i++) d += dist(l.pts[i - 1], l.pts[i]); const a = l.pts[0], z = l.pts[l.pts.length - 1], m = l.pts[Math.floor(l.pts.length / 2)]; return { from: l.from, to: l.to, min: (l.to - l.from) / 60000, hdg: meanHeading(hs), kn: kns.reduce((a, b) => a + b, 0) / kns.length, maxKn: Math.max(...kns), nm: d / 1852, slow: l.slow, start: { lat: a.lat, lon: a.lon }, mid: { lat: m.lat, lon: m.lon }, end: { lat: z.lat, lon: z.lon }, pts: l.pts }; };
     out.legs = merged.map(describe).filter(l => l.min >= 0.5);
+    // turns: a heading change of more than 50 degrees between consecutive legs under way
+    out.turns = []; for (let i = 1; i < out.legs.length; i++) { const a = out.legs[i - 1], b = out.legs[i]; if (!a.slow && !b.slow && b.from - a.to < 90000 && angDiff(a.hdg, b.hdg) > 50) out.turns.push({ t: b.from, lat: b.start.lat, lon: b.start.lon, from: a.hdg, to: b.hdg }); }
     // chapters: the legs reduced to at most 8 by folding the shortest into a neighbour, so the story stays readable
     let ch = out.legs.map(l => ({ ...l, pts: l.pts }));
     while (ch.length > 8) { let k = 0; for (let i = 1; i < ch.length; i++) if (ch[i].min < ch[k].min) k = i; const j = k > 0 && (k === ch.length - 1 || ch[k - 1].min <= ch[k + 1].min) ? k - 1 : k + 1; const a = ch[Math.min(j, k)], b = ch[Math.max(j, k)]; const f = describe({ from: a.from, to: b.to, pts: a.pts.concat(b.pts), slow: a.slow && b.slow }); ch.splice(Math.min(j, k), 2, f); }
@@ -430,6 +452,22 @@ const SA = (() => {
     return out;
   }
 
+  // tack if the wind came across the bow during the turn, gybe if it came across the stern
+  function turnKind(turn, windFrom) {
+    if (windFrom == null) return 'turn';
+    const sweep = ((turn.to - turn.from) % 360 + 360) % 360; const cw = sweep <= 180; const span = cw ? sweep : 360 - sweep;
+    const within = ang => { const d = cw ? ((ang - turn.from) % 360 + 360) % 360 : ((turn.from - ang) % 360 + 360) % 360; return d <= span; };
+    if (within(windFrom)) return 'tack'; if (within((windFrom + 180) % 360)) return 'gybe'; return 'turn';
+  }
+  // events: [{t, kind: 'hoist'|'drop'|'other', name}] -> motoring intervals [{from, to}] within the sail. No events means we do not know, so none.
+  function motoring(a, events) {
+    const ev = (events || []).filter(e => e.kind === 'hoist' || e.kind === 'drop').sort((x, y) => x.t - y.t); if (!ev.length) return [];
+    const out = []; let mFrom = a.start;
+    ev.forEach(e => { if (e.kind === 'hoist') { if (mFrom != null && e.t > mFrom) out.push({ from: mFrom, to: e.t }); mFrom = null; } else if (e.kind === 'drop' && mFrom == null) mFrom = e.t; });
+    if (mFrom != null && a.end > mFrom) out.push({ from: mFrom, to: a.end });
+    return out;
+  }
+  const inMotoring = (ms, ivs) => ivs.some(v => ms >= v.from && ms <= v.to);
   const fmtT = (ms, tz) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz });
   // When in the sail a moment fell, as words. Alternates so consecutive sentences do not all start the same way.
   function when(a, ms, alt) {
@@ -449,7 +487,7 @@ const SA = (() => {
 
   // wind: {from, kn, gust} or null. qa: [{id, q, a}] answers to weave in. Returns plain text with blank lines between paragraphs.
   function story(a, opts) {
-    opts = opts || {}; const tz = opts.tz; const w = opts.wind; const qa = opts.qa || [];
+    opts = opts || {}; const tz = opts.tz; const w = opts.wind; const qa = opts.qa || []; const events = (opts.events || []).slice().sort((x, y) => x.t - y.t); const mot = a && a.n > 1 ? motoring(a, events) : [];
     const ans = id => { const x = qa.find(q => q.id === id && q.a && q.a.trim()); return x ? ' ' + tidy(x.a) : ''; };
     if (!a || a.n < 2) return 'Too short a track to describe.';
     const P = [];
@@ -486,6 +524,9 @@ const SA = (() => {
         let posTxt = '';
         if (w && w.from != null) { const A = tackAndPos(l.hdg, w.from), B = tackAndPos(l.hdg2, w.from); const nm = tp => tp.pos === 'too close to the wind' ? 'pointed nearly into the wind' : `${tp.pos} on ${tp.tack} tack`; posTxt = `, ${nm(A)} one way and ${nm(B)} the other`; }
         s = `${t0} we worked back and forth ${inPlace(p1)} for ${Math.round(l.min)} minutes, ${l.group.length} legs between ${compassWord(l.hdg)} and ${compassWord(l.hdg2)} at around ${l.kn.toFixed(1)} knots${posTxt}.`;
+      } else if (inMotoring((l.from + l.to) / 2, mot)) {
+        const where = p1.id === p2.id ? inPlace(p1) : `from ${p1.name} ${toPlace(p2)}`;
+        s = `${t0} we motored ${compassWord(l.hdg)} ${where} at ${l.kn.toFixed(1)} knots` + (l.min >= 2 ? ` for ${Math.round(l.min)} minutes.` : '.');
       } else {
         const where = p1.id === p2.id ? inPlace(p1) : `from ${p1.name} ${toPlace(p2)}`;
         let pos = '', v = 'sailed';
@@ -496,14 +537,19 @@ const SA = (() => {
         if (peakT != null && peakT >= l.from - 15000 && peakT <= l.to + 15000 && !used.peak) { used.peak = true; s += ` That stretch held the fastest water of the day, ${a.peak10.kn.toFixed(1)} knots, ${when(a, peakT, 1).toLowerCase()}.` + ans('peak'); }
         if (longest && longest.from >= l.from && longest.to <= l.to && !used.leg) { used.leg = true; if (ch.length > 1 && !l.group) s += ' It was the longest run of the sail.'; s += ans('leg'); }
       }
+      // waypoints logged during or just after this chapter
+      const nextFrom = ch[i + 1] ? ch[i + 1].from : a.end + 1;
+      events.filter(e => e.t >= (i === 0 ? 0 : l.from) && e.t < nextFrom).forEach(e => { const pl = e.lat != null ? ' ' + inPlace(place(e.lat, e.lon)) : ''; s += e.kind === 'hoist' ? ` We hoisted the sails${pl} at ${fmtT(e.t, tz)}.` : e.kind === 'drop' ? ` We dropped the sails${pl} at ${fmtT(e.t, tz)}.` : ` At ${fmtT(e.t, tz)}${pl}: ${cap(String(e.name || 'waypoint').trim())}.`; });
       // any recording gap that ended inside or right after this chapter
       const next = ch[i + 1]; const limit = next ? next.from : a.end + 1;
       while (gapsLeft.length && gapsLeft[0].to <= limit + 20000) { const g = gapsLeft.shift(); const mins = Math.round(g.sec / 60); s += ` The recording paused ${inPlace(place(g.lat, g.lon))} for about ${mins >= 1 ? mins + ' minute' + (mins === 1 ? '' : 's') : Math.round(g.sec) + ' seconds'}` + (g === a.gaps[0] ? ', so the distance and the peaks may be a little understated.' : '.') + (g === a.gaps[0] ? ans('gap') : ''); }
       P.push(s);
     });
+    if (!ch.length) events.forEach(e => { const pl = e.lat != null ? ' ' + inPlace(place(e.lat, e.lon)) : ''; P.push(e.kind === 'hoist' ? `We hoisted the sails${pl} at ${fmtT(e.t, tz)}.` : e.kind === 'drop' ? `We dropped the sails${pl} at ${fmtT(e.t, tz)}.` : `At ${fmtT(e.t, tz)}${pl}: ${cap(String(e.name || 'waypoint').trim())}.`); });
     gapsLeft.forEach(g => { const mins = Math.round(g.sec / 60); P.push(`The recording paused ${inPlace(place(g.lat, g.lon))} for about ${mins} minutes.` + (g === a.gaps[0] ? ans('gap') : '')); });
     if (!used.peak && a.peak10) P.push(`Our fastest water was ${a.peak10.kn.toFixed(1)} knots, ${when(a, a.peak10.t, 1).toLowerCase()}, ${inPlace(place(a.peak10.lat, a.peak10.lon))}.` + ans('peak'));
     if (!used.leg && ans('leg')) P.push(ans('leg').trim());
+    if (a.turns && a.turns.length && w && w.from != null) { const kinds = a.turns.map(t => turnKind(t, w.from)); const nt = kinds.filter(k => k === 'tack').length, ng = kinds.filter(k => k === 'gybe').length; const parts = []; if (nt) parts.push(nt + (nt === 1 ? ' tack' : ' tacks')); if (ng) parts.push(ng + (ng === 1 ? ' gybe' : ' gybes')); if (parts.length) P.push(`${parts.join(' and ')} in all.`); }
     if (a.startFinishNm > 0.2) P.push(`The recording ended ${inPlace(a.endPlace)}, ${a.startFinishNm.toFixed(1)} nm ${compassWord(a.startFinishBrg)} of where it began, so it either started after leaving the slip or stopped before we were back.`);
     if (ans('day')) P.push(ans('day').trim());
     return P.join('\n\n');
@@ -521,13 +567,13 @@ const SA = (() => {
     qs.push({ id: 'day', q: 'What is the one thing about this sail you want to remember?' });
     return qs.slice(0, 4);
   }
-  return { analyze, story, questions, compass, compassWord, dist, bearing, tackAndPos, place, when };
+  return { analyze, story, questions, compass, compassWord, dist, bearing, tackAndPos, place, when, turnKind, motoring };
 })();
 </script>
 <script>
 (function () {
   'use strict';
-  const APP_VERSION = '5.6';
+  const APP_VERSION = '5.8';
   const LAKE = { lat: 40.975, lon: -96.870, zoom: 14 };
   const DRAFT_FT = 2.5;
   const CONTOUR_URL = "https://services5.arcgis.com/IOshH1zLrIieqrNk/arcgis/rest/services/LakeContours/FeatureServer/0/query"
@@ -652,7 +698,7 @@ const SA = (() => {
 
   /* ---------- GPS and tracking ---------- */
   let watchId = null, posMarker = null, accCircle = null, headingEl = null, wakeLock = null;
-  let recording = false, track = [], trackLine = null, lastPos = null, followMe = true, fixBuf = [], lastCog = null, lastKn = null;
+  let recording = false, track = [], trackLine = null, trackEvents = [], liveLayer = null, lastPos = null, followMe = true, fixBuf = [], lastCog = null, lastKn = null;
   const posIcon = L.divIcon({ className: '', html: '<div class="pos-dot"></div><div class="pos-heading hidden"></div>', iconSize: [16, 16], iconAnchor: [8, 8] });
   function startGps() {
     if (!navigator.geolocation) { toast('No GPS available in this browser'); return; }
@@ -703,12 +749,12 @@ const SA = (() => {
   }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { applyWake(); if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; startGps(); } } });
 
-  function saveCurrentTrack() { store.set('track_current', { started: track[0] ? track[0].t : Date.now(), pts: track }); }
+  function saveCurrentTrack() { store.set('track_current', { started: track[0] ? track[0].t : Date.now(), pts: track, events: trackEvents }); }
   const newId = () => Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
   const touch = (o) => { o.updated = Date.now(); o.dirty = true; return o; };
 
   /* ---------- Sails (tracks) ---------- */
-  let sails = (store.get('tracks', []) || []).map(t => ({ ...t, id: String(t.id), name: t.name || '', story: t.story || '', auto: t.auto || '', qa: t.qa || [], photos: t.photos || [], wind: t.wind || null, pending: !!t.pending, updated: t.updated || t.ended || Date.now(), deleted: !!t.deleted, by: t.by || '' }));
+  let sails = (store.get('tracks', []) || []).map(t => ({ ...t, id: String(t.id), name: t.name || '', story: t.story || '', auto: t.auto || '', qa: t.qa || [], photos: t.photos || [], wind: t.wind || null, events: t.events || [], pending: !!t.pending, updated: t.updated || t.ended || Date.now(), deleted: !!t.deleted, by: t.by || '' }));
   function saveSails() { store.set('tracks', sails); }
   const TZ = 'America/Chicago';
   const anaCache = {};
@@ -722,44 +768,21 @@ const SA = (() => {
       h.time.forEach((t, i) => { const dd = Math.abs(new Date(t + ':00-05:00').getTime() - ms); if (dd < bd) { bd = dd; best = i; } });
       return { from: h.wind_direction_10m[best], kn: h.wind_speed_10m[best], gust: h.wind_gusts_10m[best] }; } catch (e) { return null; }
   }
-  function liveStory(t) { return SA.story(analysisOf(t), { tz: TZ, wind: t.wind, qa: t.qa || [] }); }
+  function liveStory(t) { return SA.story(analysisOf(t), { tz: TZ, wind: t.wind, qa: t.qa || [], events: t.events || [] }); }
   function writeAuto(t) { t.auto = liveStory(t); }
-  function finishSail(pts, recovered) {
-    const s = touch({ id: newId(), name: '', story: '', auto: '', qa: [], photos: [], wind: windNow(), pending: true, started: pts[0].t, ended: pts[pts.length - 1].t, pts, deleted: false, by: crewName(), recovered: !!recovered });
+  function finishSail(pts, recovered, events) {
+    const s = touch({ id: newId(), name: '', story: '', auto: '', qa: [], photos: [], wind: windNow(), events: events || [], pending: false, started: pts[0].t, ended: pts[pts.length - 1].t, pts, deleted: false, by: crewName(), recovered: !!recovered });
     writeAuto(s); sails.unshift(s); saveSails(); syncSoon(); return s;
   }
-  // Interview: summary, then one question at a time, then photos
-  let iv = null;
-  function openInterview(t) {
-    const a = analysisOf(t); const qs = SA.questions(a, { tz: TZ }).filter(q => !(t.qa || []).some(x => x.id === q.id));
-    iv = { t, qs, i: -1 }; renderInterview();
-  }
-  function renderInterview() {
-    const box = $('#rsheet-box'); const { t, qs } = iv; $('#rsheet').classList.remove('hidden');
-    const later = () => { t.pending = true; touch(t); saveSails(); syncSoon(); closeRouteSheet(); renderTracks(); toast('Saved for later. A reminder is on the Log tab.'); };
-    if (iv.i === -1) {
-      box.innerHTML = `<h2>${t.name ? esc(t.name) : 'Your sail'}</h2><div class="story" style="white-space:pre-wrap;font-size:14px;max-height:40vh;overflow:auto">${esc(t.story || liveStory(t))}</div>
-        <div class="small muted" style="margin-top:8px">${qs.length ? qs.length + ' question' + (qs.length > 1 ? 's' : '') + ' about this sail, then photos.' : 'No questions left; add photos if you have them.'}</div>
-        <div class="toolbar" style="margin-top:12px"><button class="btn primary" id="iv-start">${qs.length ? 'Start the interview' : 'Add photos'}</button><button class="btn" id="iv-later">Later</button></div>`;
-      box.querySelector('#iv-start').addEventListener('click', () => { iv.i = qs.length ? 0 : qs.length; renderInterview(); });
-      box.querySelector('#iv-later').addEventListener('click', later); return;
-    }
-    if (iv.i < qs.length) {
-      const q = qs[iv.i];
-      box.innerHTML = `<h2>Question ${iv.i + 1} of ${qs.length}</h2><p style="margin:6px 0 8px">${esc(q.q)}</p><textarea id="iv-a" placeholder="in your words"></textarea>
-        <div class="toolbar" style="margin-top:12px"><button class="btn primary" id="iv-next">Next</button><button class="btn" id="iv-skip">Skip</button><button class="btn" id="iv-later">Later</button></div>`;
-      setTimeout(() => box.querySelector('#iv-a').focus(), 50);
-      box.querySelector('#iv-next').addEventListener('click', () => { const a = box.querySelector('#iv-a').value.trim(); if (a) { t.qa = (t.qa || []).filter(x => x.id !== q.id); t.qa.push({ id: q.id, q: q.q, a }); if (t.story) t.story = t.story.trim() + '\n\n' + a; writeAuto(t); touch(t); saveSails(); syncSoon(); } iv.i++; renderInterview(); });
-      box.querySelector('#iv-skip').addEventListener('click', () => { iv.i++; renderInterview(); });
-      box.querySelector('#iv-later').addEventListener('click', later); return;
-    }
-    // photos step
+  // Photos sheet for a sail
+  function openPhotos(t) {
+    const box = $('#rsheet-box'); $('#rsheet').classList.remove('hidden');
     const n = (t.photos || []).length;
-    box.innerHTML = `<h2>Any pictures from this sail?</h2><div class="small muted">Up to 6. They are shrunk for the phone and shared with the crew.</div>
-      <div class="photos" id="iv-photos">${(t.photos || []).map(p => `<img src="${p.data}" alt="">`).join('')}</div>
-      <div class="toolbar" style="margin-top:12px"><label class="btn primary">${n ? 'Add more' : 'Choose photos'}<input type="file" id="iv-file" accept="image/*" multiple></label><button class="btn" id="iv-done">${n ? 'Done' : 'No photos, done'}</button></div>`;
-    box.querySelector('#iv-file').addEventListener('change', async e => { await addPhotos(t, e.target.files); renderInterview(); });
-    box.querySelector('#iv-done').addEventListener('click', () => { t.pending = false; touch(t); saveSails(); syncSoon(); closeRouteSheet(); renderTracks(); toast('Story saved'); let fresh = []; try { fresh = renderAwards(); } catch (e) {} if (fresh.length) setTimeout(() => { toast('New Sail earned: ' + fresh.map(r => r.aw.name).join(', '), 4000); openAward(fresh[0].aw.id); }, 500); });
+    box.innerHTML = `<h2>${t.name ? esc(t.name) : 'Pictures from this sail'}</h2><div class="small muted">Up to 6. They are shrunk for the phone and shared with the crew. Tap a picture in the log to remove it.</div>
+      <div class="photos" id="ph-list">${(t.photos || []).map(p => `<img src="${p.data}" alt="">`).join('')}</div>
+      <div class="toolbar" style="margin-top:12px"><label class="btn primary">${n ? 'Add more' : 'Choose photos'}<input type="file" id="ph-file" accept="image/*" multiple></label><button class="btn" id="ph-done">Done</button></div>`;
+    box.querySelector('#ph-file').addEventListener('change', async e => { await addPhotos(t, e.target.files); openPhotos(t); });
+    box.querySelector('#ph-done').addEventListener('click', () => { closeRouteSheet(); renderTracks(); });
   }
   async function addPhotos(t, files) {
     t.photos = t.photos || [];
@@ -774,17 +797,17 @@ const SA = (() => {
     box.querySelector('#ph-close').addEventListener('click', closeRouteSheet); }
   $('#btn-track').addEventListener('click', async () => {
     if (!recording) {
-      recording = true; track = []; trackLine = L.polyline([], { color: '#ffcc4d', weight: 3, opacity: .9 }).addTo(map);
+      recording = true; track = []; trackEvents = []; if (liveLayer) map.removeLayer(liveLayer); liveLayer = L.layerGroup().addTo(map); trackLine = L.polyline([], { color: '#ffcc4d', weight: 3, opacity: .9 }).addTo(liveLayer); $('#btn-wp').classList.remove('hidden'); placeWpBtn(); showSail(null);
       $('#btn-track').classList.add('on'); startGps(); await requestWake(); toast(wakeStatus === 'on' ? 'Recording sail. Screen will stay on.' : 'Recording sail. Keep the screen on manually.');
     } else {
       recording = false; $('#btn-track').classList.remove('on');
       applyWake();
-      if (track.length > 1) { const s = finishSail(track); toast('Sail saved (' + track.length + ' points)'); setTimeout(() => openInterview(s), 400); }
+      $('#btn-wp').classList.add('hidden'); if (track.length > 1) { finishSail(track, false, trackEvents); toast('Sail saved (' + track.length + ' points)'); let fresh = []; try { fresh = renderAwards(); } catch (e) {} if (fresh.length) setTimeout(() => { toast('New Sail earned: ' + fresh.map(r => r.aw.name).join(', '), 4000); openAward(fresh[0].aw.id); }, 800); }
       else toast('Sail too short to save');
-      localStorage.removeItem('track_current'); track = []; $('#hud-sub').textContent = lastPos ? `±${Math.round(lastPos.acc)} m` : 'GPS on';
+      localStorage.removeItem('track_current'); track = []; trackEvents = []; $('#hud-sub').textContent = lastPos ? `±${Math.round(lastPos.acc)} m` : 'GPS on';
     }
   });
-  function recoverTrack() { const cur = store.get('track_current', null); if (cur && cur.pts && cur.pts.length > 1) { finishSail(cur.pts, true); localStorage.removeItem('track_current'); } }
+  function recoverTrack() { const cur = store.get('track_current', null); if (cur && cur.pts && cur.pts.length > 1) { finishSail(cur.pts, true, cur.events || []); localStorage.removeItem('track_current'); } }
 
   function trackStats(t) {
     let dist = 0; for (let i = 1; i < t.pts.length; i++) dist += map.distance([t.pts[i - 1].lat, t.pts[i - 1].lon], [t.pts[i].lat, t.pts[i].lon]);
@@ -811,21 +834,69 @@ const SA = (() => {
     setTimeout(fillWind, 50);
     const live = sails.filter(t => !t.deleted).sort((a, b) => b.started - a.started); const el = $('#tracks-list');
     if (!live.length) { el.innerHTML = '<span class="muted">No sails yet. Tap the record button on the map to start one.</span>'; return; }
-    const pend = live.filter(t => t.pending);
-    const banner = pend.length ? `<div class="pending"><b>Interview waiting:</b> ${pend.map(t => `<button class="linkbtn" data-iv="${t.id}">${t.name ? esc(t.name) : new Date(t.started).toLocaleDateString()}</button>`).join(', ')}</div>` : '';
-    el.innerHTML = banner + live.map(t => { const a = analysisOf(t); const full = t.story ? t.story : liveStory(t);
-      return `<div class="markitem"><div class="name">${t.name ? esc(t.name) : new Date(t.started).toLocaleDateString()}${t.pending ? ' <span class="warn small">(interview waiting)</span>' : ''}</div><div class="note">${new Date(t.started).toLocaleDateString()} ${fmtTime(new Date(t.started))} to ${fmtTime(new Date(t.ended))} · ${a.nm.toFixed(2)} nm · ${Math.round(a.minutes)} min · avg ${a.avgMovingKn.toFixed(1)} kn · max ${a.peak10 ? a.peak10.kn.toFixed(1) : '–'} kn${a.gaps && a.gaps.length ? ' · ' + a.gaps.length + ' gap' + (a.gaps.length > 1 ? 's' : '') : ''}${t.by ? ' · ' + esc(t.by) : ''}</div>
+    el.innerHTML = live.map(t => { const a = analysisOf(t); const full = t.story ? t.story : liveStory(t);
+      return `<div class="markitem"><div class="name">${t.name ? esc(t.name) : new Date(t.started).toLocaleDateString()}</div>
       ${full.trim() ? `<div class="story clamp" data-story="s${t.id}">${esc(full)}</div><button class="linkbtn" data-more="s${t.id}">Read more</button>` : ''}
       ${(t.photos || []).length ? `<div class="photos">${t.photos.map(p => `<img src="${p.data}" data-ph="${t.id}:${p.id}" alt="">`).join('')}</div>` : ''}
-      <div class="toolbar"><button class="btn sm${t.pending ? ' primary' : ''}" data-iv="${t.id}">${t.pending ? 'Interview' : (t.qa || []).length ? 'Add photos' : 'Interview'}</button><button class="btn sm" data-show="${t.id}">Show on map</button><button class="btn sm" data-sedit="${t.id}">Edit</button><button class="btn sm" data-gpx="${t.id}">Share GPX</button><button class="btn sm danger" data-del="${t.id}">Delete</button></div></div>`; }).join('');
-    el.querySelectorAll('[data-iv]').forEach(b => b.addEventListener('click', () => openInterview(sails.find(x => x.id == b.dataset.iv))));
+      <div class="toolbar"><button class="btn sm" data-iv="${t.id}">Add photos</button><button class="btn sm" data-show="${t.id}">Show on map</button><button class="btn sm" data-sedit="${t.id}">Edit</button><button class="btn sm" data-gpx="${t.id}">Share GPX</button><button class="btn sm danger" data-del="${t.id}">Delete</button></div></div>`; }).join('');
+    el.querySelectorAll('[data-iv]').forEach(b => b.addEventListener('click', () => openPhotos(sails.find(x => x.id == b.dataset.iv))));
     el.querySelectorAll('[data-ph]').forEach(im => im.addEventListener('click', () => { const [sid, pid] = im.dataset.ph.split(':'); viewPhoto(sails.find(x => x.id == sid), pid); }));
-    el.querySelectorAll('[data-show]').forEach(b => b.addEventListener('click', () => { const t = sails.find(x => x.id == b.dataset.show); if (shownTrack) map.removeLayer(shownTrack); shownTrack = L.polyline(t.pts.map(p => [p.lat, p.lon]), { color: '#5fd38d', weight: 3 }).addTo(map); map.fitBounds(shownTrack.getBounds(), { padding: [30, 30] }); followMe = false; document.querySelector('nav button[data-view=map]').click(); }));
+    el.querySelectorAll('[data-show]').forEach(b => b.addEventListener('click', () => { const t = sails.find(x => x.id == b.dataset.show); document.querySelector('nav button[data-view=map]').click(); setTimeout(() => showSail(t), 80); }));
     el.querySelectorAll('[data-sedit]').forEach(b => b.addEventListener('click', () => openSheet(sails.find(x => x.id == b.dataset.sedit), false, 'sail')));
     el.querySelectorAll('[data-gpx]').forEach(b => b.addEventListener('click', () => { const t = sails.find(x => x.id == b.dataset.gpx); shareFile('buen-camino-' + new Date(t.started).toISOString().slice(0, 10) + '.gpx', gpx(t), 'application/gpx+xml'); }));
     el.querySelectorAll('[data-more]').forEach(b => b.addEventListener('click', () => { const s = el.querySelector(`[data-story="${b.dataset.more}"]`); s.classList.toggle('clamp'); b.textContent = s.classList.contains('clamp') ? 'Read more' : 'Show less'; }));
     el.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { if (confirm('Delete this sail?')) { const t = sails.find(x => x.id == b.dataset.del); t.deleted = true; touch(t); saveSails(); renderTracks(); syncSoon(); } }));
   }
+
+  /* ---------- Waypoints while recording ---------- */
+  function placeWpBtn() { const hs = $('#heelstrip'); $('#btn-wp').style.top = (hs.offsetTop + hs.offsetHeight + 8) + 'px'; }
+  window.addEventListener('resize', placeWpBtn);
+  function logWaypoint(kind, name) {
+    const e = { id: newId(), t: Date.now(), lat: lastPos ? lastPos.lat : null, lon: lastPos ? lastPos.lon : null, kind, name: name || '' };
+    trackEvents.push(e); saveCurrentTrack();
+    // the live line changes color: green under sail, black under power
+    if (kind === 'hoist' || kind === 'drop') { const ll = lastPos ? [[lastPos.lat, lastPos.lon]] : []; trackLine = L.polyline(ll, { color: kind === 'hoist' ? '#5fd38d' : '#111', weight: 3, opacity: .9 }).addTo(liveLayer); }
+    if (lastPos) L.circleMarker([lastPos.lat, lastPos.lon], { radius: 5, color: '#0d2c42', weight: 1.5, fillColor: '#ffcc4d', fillOpacity: 1 }).addTo(liveLayer).bindPopup(fmtTime(new Date(e.t)) + ' · ' + eventLabel(e), { className: 'turnpop' });
+    toast(eventLabel(e) + ' logged');
+  }
+  function eventLabel(e) { return e.kind === 'hoist' ? 'Hoisted sails' : e.kind === 'drop' ? 'Dropped sails' : (e.name || 'Waypoint'); }
+  $('#btn-wp').addEventListener('click', () => {
+    if (!recording) return; const box = $('#rsheet-box'); $('#rsheet').classList.remove('hidden');
+    box.innerHTML = `<h2>Waypoint</h2><div class="small muted" style="margin-bottom:10px">${fmtTime(new Date())}${lastPos ? ' · ' + SA.place(lastPos.lat, lastPos.lon).name : ''}</div>
+      <button class="btn primary wp-opt" data-wp="hoist">Hoisted sails</button><button class="btn primary wp-opt" data-wp="drop">Dropped sails</button><button class="btn wp-opt" data-wp="other">Other</button>
+      <div id="wp-other" class="hidden"><input type="text" id="wp-name" placeholder="for example: reefed the main, lunch stop" autocomplete="off"><div class="toolbar" style="margin-top:8px"><button class="btn primary" id="wp-save">Save waypoint</button></div></div>
+      <div class="toolbar"><button class="btn" id="wp-cancel">Cancel</button></div>`;
+    box.querySelectorAll('[data-wp]').forEach(b => b.addEventListener('click', () => { if (b.dataset.wp === 'other') { box.querySelector('#wp-other').classList.remove('hidden'); box.querySelector('#wp-name').focus(); return; } logWaypoint(b.dataset.wp); closeRouteSheet(); }));
+    box.querySelector('#wp-save').addEventListener('click', () => { const n = box.querySelector('#wp-name').value.trim(); if (!n) { box.querySelector('#wp-name').focus(); return; } logWaypoint('other', n); closeRouteSheet(); });
+    box.querySelector('#wp-cancel').addEventListener('click', closeRouteSheet);
+  });
+
+  /* ---------- Viewing a logged sail on the map ---------- */
+  let shownSail = null, sailLayer = L.layerGroup().addTo(map), windOverride = null;
+  function showSail(t) {
+    sailLayer.clearLayers(); shownSail = t; windOverride = null;
+    $('#sailbar').classList.toggle('hidden', !t); $('#heelstrip').classList.toggle('hidden', !!t); $('#sb-story').classList.add('hidden'); $('#sb-toggle').textContent = 'Show story';
+    if (!t) { setWindState(); return; }
+    const a = analysisOf(t); const mot = SA.motoring(a, t.events || []);
+    // the track, green under sail and black under power
+    const pts = t.pts; let seg = [], segMot = null;
+    const flush = () => { if (seg.length > 1) { if (segMot) L.polyline(seg, { color: '#fff', weight: 5, opacity: .55 }).addTo(sailLayer); L.polyline(seg, { color: segMot ? '#111' : '#5fd38d', weight: 3, opacity: .95 }).addTo(sailLayer); } };
+    pts.forEach(p => { const m = mot.some(v => p.t >= v.from && p.t <= v.to); if (segMot === null) segMot = m; if (m !== segMot) { const last = seg[seg.length - 1]; flush(); seg = last ? [last] : []; segMot = m; } seg.push([p.lat, p.lon]); }); flush();
+    // turns
+    (a.turns || []).forEach(tr => { const kind = SA.turnKind(tr, t.wind ? t.wind.from : null); L.circleMarker([tr.lat, tr.lon], { radius: 5, color: '#0d2c42', weight: 1.5, fillColor: '#5fd38d', fillOpacity: 1 }).addTo(sailLayer).bindPopup(`${fmtTime(new Date(tr.t))} · ${kind.charAt(0).toUpperCase() + kind.slice(1)} (${SA.compass(tr.from)} to ${SA.compass(tr.to)})`, { className: 'turnpop' }); });
+    // waypoints
+    (t.events || []).forEach(e => { if (e.lat == null) return; L.circleMarker([e.lat, e.lon], { radius: 6, color: '#0d2c42', weight: 1.5, fillColor: '#ffcc4d', fillOpacity: 1 }).addTo(sailLayer).bindPopup(`${fmtTime(new Date(e.t))} · ${esc(eventLabel(e))}`, { className: 'turnpop' }); });
+    // title, story, and the wind as it was
+    $('#sb-name').textContent = t.name || new Date(t.started).toLocaleDateString();
+    $('#sb-sub').textContent = new Date(t.started).toLocaleDateString() + ' ' + fmtTime(new Date(t.started)) + ' to ' + fmtTime(new Date(t.ended)) + ' · ' + a.nm.toFixed(1) + ' nm' + (t.wind ? ' · wind ' + compass(t.wind.from) + ' ' + Math.round(t.wind.kn) + ' kn' : '') + ' · tap for the story';
+    $('#sb-story').textContent = t.story || liveStory(t);
+    if (t.wind && t.wind.from != null) windOverride = { from: t.wind.from, kn: t.wind.kn };
+    setWindState();
+    const b = L.latLngBounds(pts.map(p => [p.lat, p.lon])); map.fitBounds(b, { padding: [30, 30] }); followMe = false;
+  }
+  const sbToggle = () => { const st = $('#sb-story'); st.classList.toggle('hidden'); $('#sb-toggle').textContent = st.classList.contains('hidden') ? 'Show story' : 'Hide story'; };
+  $('#sb-head').addEventListener('click', sbToggle); $('#sb-toggle').addEventListener('click', sbToggle);
+  $('#sb-close').addEventListener('click', () => showSail(null));
 
   /* ---------- Heel-O-Meter (strip at the top of the map) ---------- */
   let heelOn = false, heelG = null, heelZero = store.get('heelZero', null), heelSwap = store.get('heelSwap', false), heelMax = 0, heelCur = null, heelTimer = null, heelSheetOpen = false;
@@ -943,6 +1014,16 @@ const SA = (() => {
     else if (shape === 'genoa') body = `<line x1="70" y1="2" x2="6" y2="114" stroke="#777" stroke-width="2"/><path d="M68 6 L10 110 Q54 106 97 104 Q94 42 68 6 Z" fill="${color}" stroke="${dark}" stroke-width="1.5"/><path d="M54 34 L78 36 M42 58 L88 60 M30 82 L94 84 M20 100 L96 100" stroke="${seam}" stroke-width="1.5"/>`;
     else body = `<path d="M50 6 Q8 36 12 110 Q50 98 88 110 Q92 36 50 6 Z" fill="${color}" stroke="${dark}" stroke-width="1.5"/><path d="M50 6 Q36 60 30 108 M50 6 Q64 60 70 108" stroke="${seam}" stroke-width="1.5" fill="none"/><path d="M50 6 Q22 40 20 100" stroke="${lite}" stroke-width="3" fill="none" opacity=".5"/>`;
     return `<svg viewBox="0 0 100 120" width="${size}" height="${size * 1.2}" aria-hidden="true">${body}</svg>`;
+  }
+  function renderSeasonStats() {
+    const el = $('#season-stats'); if (!el) return;
+    const yr = sailParts(Date.now()).y; const ctx = awardContext(); const ss = ctx.sails.filter(s => s.year === yr);
+    if (!ss.length) { el.innerHTML = '<span class="muted">No sails yet this season.</span>'; return; }
+    const nm = ss.reduce((a, s) => a + s.nm, 0), hrs = ss.reduce((a, s) => a + s.hours, 0); const best = ss.filter(s => s.peak != null).sort((a, b) => b.peak - a.peak)[0]; const longest = ss.slice().sort((a, b) => b.nm - a.nm)[0];
+    const moving = ss.reduce((a, s) => a + (s.a.avgMovingKn || 0) * s.nm, 0) / (nm || 1); const months = new Set(ss.map(s => s.month)).size; const first = ss[0], last = ss[ss.length - 1];
+    const tile = (v, l) => `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+    el.innerHTML = `<div class="stats">${tile(ss.length, ss.length === 1 ? 'sail' : 'sails')}${tile(nm.toFixed(1), 'nautical miles')}${tile(hrs >= 10 ? Math.round(hrs) + ' h' : Math.floor(hrs) + ' h ' + Math.round((hrs % 1) * 60) + ' m', 'on the water')}${tile(best ? best.peak.toFixed(1) + ' kn' : '–', 'top speed')}${tile(moving.toFixed(1) + ' kn', 'average while moving')}${tile(longest ? longest.nm.toFixed(1) + ' nm' : '–', 'longest sail')}</div>
+      <div class="small muted" style="margin-top:8px">${yr} season, ${months} month${months === 1 ? '' : 's'} sailed, from ${first.dateLabel.replace(', ' + yr, '')} to ${last.dateLabel.replace(', ' + yr, '')}.${best ? ' Top speed on ' + (best.t.name ? '"' + esc(best.t.name) + '"' : best.dateLabel) + '.' : ''}</div>`;
   }
   let awardsSeen = store.get('awardsSeen', null);
   function renderAwards() {
@@ -1074,7 +1155,7 @@ const SA = (() => {
   $('#nudge-cancel').addEventListener('click', () => endNudge(false));
 
   function renderMarks() {
-    renderTracks(); renderSyncStatus(); try { renderAwards(); } catch (e) { console.warn('awards', e); } const el = $('#marks-list'); const live = liveMarks();
+    renderTracks(); renderSyncStatus(); try { renderAwards(); renderSeasonStats(); } catch (e) { console.warn('awards', e); } const el = $('#marks-list'); const live = liveMarks();
     if (!live.length) { el.innerHTML = '<span class="muted">No marks yet. On the map, tap the pin button or press and hold on the water.</span>'; return; }
     el.innerHTML = live.map(m => `<div class="markitem"><div class="name">${esc(m.name)}${m.kind === 'place' ? ' <span class="small muted">place</span>' : ''}</div>${m.note ? `<div class="note">${esc(m.note)}</div>` : ''}${m.story ? `<div class="story clamp" data-story="${m.id}">${esc(m.story)}</div><button class="linkbtn" data-more="${m.id}">Read more</button>` : ''}<div class="small muted">${m.lat.toFixed(5)}, ${m.lon.toFixed(5)} · ${new Date(m.at).toLocaleDateString()}${m.by ? ' · ' + esc(m.by) : ''}</div>
       <div class="toolbar"><button class="btn sm" data-go="${m.id}">Show</button><button class="btn sm" data-edit="${m.id}">Edit</button><button class="btn sm" data-nudge="${m.id}">Nudge</button><button class="btn sm danger" data-del="${m.id}">Delete</button></div></div>`).join('');
@@ -1377,7 +1458,7 @@ const SA = (() => {
       // push dirty marks and sails
       const dm = marks.filter(m => m.dirty).map(m => ({ id: m.id, name: m.name, note: m.note || '', story: m.story || '', kind: m.kind || 'mark', lat: m.lat, lon: m.lon, created_at: iso(m.at || m.updated), updated_at: iso(m.updated), deleted: !!m.deleted, device: m.by || '' }));
       if (dm.length) { await sb('marks', { method: 'POST', body: dm, prefer: 'resolution=merge-duplicates,return=minimal' }); marks.forEach(m => m.dirty = false); }
-      const ds = sails.filter(t => t.dirty).map(t => ({ id: t.id, name: t.name || '', story: t.story || '', auto: t.auto || '', qa: t.qa || [], photos: t.photos || [], wind: t.wind || null, pending: !!t.pending, started: iso(t.started), ended: iso(t.ended), pts: t.pts, updated_at: iso(t.updated), deleted: !!t.deleted, device: t.by || '' }));
+      const ds = sails.filter(t => t.dirty).map(t => ({ id: t.id, name: t.name || '', story: t.story || '', auto: t.auto || '', qa: t.qa || [], photos: t.photos || [], wind: t.wind || null, events: t.events || [], pending: !!t.pending, started: iso(t.started), ended: iso(t.ended), pts: t.pts, updated_at: iso(t.updated), deleted: !!t.deleted, device: t.by || '' }));
       if (ds.length) { await sb('sails', { method: 'POST', body: ds, prefer: 'resolution=merge-duplicates,return=minimal' }); sails.forEach(t => t.dirty = false); }
       const dr = routes.filter(r => r.dirty).map(r => ({ id: r.id, name: r.name || '', story: r.story || '', waypoints: r.wps, updated_at: iso(r.updated), deleted: !!r.deleted, device: r.by || '' }));
       if (dr.length) { await sb('routes', { method: 'POST', body: dr, prefer: 'resolution=merge-duplicates,return=minimal' }); routes.forEach(r => r.dirty = false); }
@@ -1394,8 +1475,8 @@ const SA = (() => {
         else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { name: r.name, note: r.note || '', story: r.story || '', kind: r.kind || 'mark', lat: r.lat, lon: r.lon, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
       const rs = await sb('sails?select=*&updated_at=gt.' + encodeURIComponent(since));
       rs.forEach(r => { const u = Date.parse(r.updated_at); const loc = sails.find(t => t.id === r.id);
-        if (!loc) { sails.push({ id: r.id, name: r.name || '', story: r.story || '', auto: r.auto || '', qa: r.qa || [], photos: r.photos || [], wind: r.wind || null, pending: !!r.pending, started: Date.parse(r.started), ended: Date.parse(r.ended), pts: r.pts, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
-        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { name: r.name || '', story: r.story || '', auto: r.auto || '', qa: r.qa || [], photos: r.photos || [], wind: r.wind || loc.wind, pending: !!r.pending, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
+        if (!loc) { sails.push({ id: r.id, name: r.name || '', story: r.story || '', auto: r.auto || '', qa: r.qa || [], photos: r.photos || [], wind: r.wind || null, events: r.events || [], pending: !!r.pending, started: Date.parse(r.started), ended: Date.parse(r.ended), pts: r.pts, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
+        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { name: r.name || '', story: r.story || '', auto: r.auto || '', qa: r.qa || [], photos: r.photos || [], wind: r.wind || loc.wind, events: r.events || loc.events || [], pending: !!r.pending, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
       const rr = await sb('routes?select=*&updated_at=gt.' + encodeURIComponent(since));
       rr.forEach(r => { const u = Date.parse(r.updated_at); const loc = routes.find(x => x.id === r.id);
         if (!loc) { routes.push({ id: r.id, name: r.name || '', story: r.story || '', wps: r.waypoints, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
@@ -1463,10 +1544,11 @@ const SA = (() => {
   $('#btn-wind').addEventListener('click', () => { windOn = !windOn; store.set('windAnim', windOn); $('#btn-wind').classList.toggle('on', windOn); windOn ? startWind() : stopWind(); });
   function sizeWind() { const r = wc.getBoundingClientRect(); const dpr = Math.min(2, window.devicePixelRatio || 1); wc.width = Math.round(r.width * dpr); wc.height = Math.round(r.height * dpr); wctx.setTransform(dpr, 0, 0, dpr, 0, 0); wc._w = r.width; wc._h = r.height; }
   function setWindState() {
-    if (!wx || !wx.current) return;
-    const c = wx.current; const kn = c.wind_speed_10m, toDeg = (c.wind_direction_10m + 180) % 360; const rad = toDeg * Math.PI / 180;
+    const src = (typeof windOverride !== 'undefined' && windOverride) ? { wind_speed_10m: windOverride.kn, wind_direction_10m: windOverride.from } : (wx && wx.current);
+    if (!src) return;
+    const c = src; const kn = c.wind_speed_10m, toDeg = (c.wind_direction_10m + 180) % 360; const rad = toDeg * Math.PI / 180;
     windState = { kn, dx: Math.sin(rad), dy: -Math.cos(rad), color: windColor(kn), dir: compass(c.wind_direction_10m) };
-    $('#windlegend-info').innerHTML = `<span class="muted">now ${Math.round(kn)} kn from ${windState.dir}</span>` + WIND_BINS.map(b => `<span><i style="background:${b[2]}"></i>${b[1] > 50 ? b[0] + '+' : b[0] + '-' + b[1]}</span>`).join('');
+    $('#windlegend-info').innerHTML = `<span class="muted">${windOverride ? 'during the sail shown' : 'now'} ${Math.round(kn)} kn from ${windState.dir}</span>` + WIND_BINS.map(b => `<span><i style="background:${b[2]}"></i>${b[1] > 50 ? b[0] + '+' : b[0] + '-' + b[1]}</span>`).join('');
   }
   function seed(n) { particles = []; for (let i = 0; i < n; i++) particles.push({ x: Math.random() * wc._w, y: Math.random() * wc._h, life: Math.random() * 300 }); }
   function drawArrow(x, y, dx, dy, col) { const s = 6; wctx.save(); wctx.translate(x, y); wctx.rotate(Math.atan2(dy, dx) + Math.PI / 2); wctx.beginPath(); wctx.moveTo(0, -s); wctx.lineTo(s * .6, s); wctx.lineTo(0, s * .45); wctx.lineTo(-s * .6, s); wctx.closePath(); wctx.fillStyle = col; wctx.fill(); wctx.restore(); }
