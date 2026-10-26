@@ -31,6 +31,9 @@
   .view { position: absolute; inset: 0; display: none; overflow: auto; -webkit-overflow-scrolling: touch; }
   .view.active { display: block; }
   #map { position: absolute; inset: 0; background: #08202f; }
+  /* night chart: OpenStreetMap recolored to navy water and dark green land (filter defined in #bo-night-defs), contours faded so the track reads first */
+  .night-tiles { filter: url(#bo-night); }
+  #map.night .leaflet-contours-pane { opacity: .4; }
   nav { display: flex; background: var(--panel); border-top: 1px solid var(--line); padding-bottom: var(--safe-bottom); }
   nav button { flex: 1; background: none; border: 0; color: var(--muted); padding: 10px 4px 8px; font-size: 12px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
   nav button.active { color: var(--accent); }
@@ -209,10 +212,11 @@
   </header>
   <main>
     <section class="view active" id="view-map">
+      <svg id="bo-night-defs" width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="bo-night" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0.714 -1.381 -0.032 0 0.835  0.279 -0.659 -0.351 0 0.885  -0.126 -0.692 0.113 0 0.931  0 0 0 1 0"/></filter></svg>
       <div id="map"></div>
       <canvas id="windcanvas"></canvas>
       <button id="btn-wp" class="on hidden" title="Log a waypoint"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor" stroke="none"/></svg></button>
-      <div id="sailbar" class="hidden"><div id="sb-head"><div id="sb-name"></div><div id="sb-sub"></div></div><div id="sb-story" class="hidden"></div><div id="sb-btns"><button class="btn sm" id="sb-toggle">Show story</button><button class="btn sm" id="sb-close">Close sail</button></div></div>
+      <div id="sailbar" class="hidden"><div id="sb-head"><div id="sb-name"></div><div id="sb-sub"></div></div><div id="sb-story" class="hidden"></div><div id="sb-btns"><button class="btn sm" id="sb-toggle">Show overview</button><button class="btn sm" id="sb-close">Close sail</button></div></div>
       <div id="heelstrip" title="Heel-O-Meter"><div id="hs-num">–</div><div id="hs-txt"><div id="hs-zone">Heel-O-Meter</div><div id="hs-side">tap to start</div></div></div>
       <div class="mapbtns">
         <button id="btn-locate" title="Center on me"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
@@ -362,7 +366,7 @@
 </div>
 
 <script>
-// Track analysis and story generation for Branched Oak Sailing. Pure functions; shared by the app and the node test.
+// Track analysis and the factual sail overview for Branched Oak Sailing. Pure functions; shared by the app and the node test.
 const SA = (() => {
   const toRad = d => d * Math.PI / 180, toDeg = r => r * 180 / Math.PI;
   function dist(a, b) { const R = 6371000, p1 = toRad(a.lat), p2 = toRad(b.lat), dp = p2 - p1, dl = toRad(b.lon - a.lon); const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); }
@@ -370,6 +374,7 @@ const SA = (() => {
   const compass = deg => ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(deg / 22.5) % 16];
   const compassWord = deg => ({ N: 'north', NNE: 'north northeast', NE: 'northeast', ENE: 'east northeast', E: 'east', ESE: 'east southeast', SE: 'southeast', SSE: 'south southeast', S: 'south', SSW: 'south southwest', SW: 'southwest', WSW: 'west southwest', W: 'west', WNW: 'west northwest', NW: 'northwest', NNW: 'north northwest' })[compass(deg)];
   const meanHeading = hs => { let x = 0, y = 0; hs.forEach(h => { x += Math.cos(toRad(h)); y += Math.sin(toRad(h)); }); return (toDeg(Math.atan2(y, x)) + 360) % 360; };
+  const MAX_KN = 9;
   const angDiff = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
   function pointOfSail(angle) { if (angle < 38) return 'too close to the wind'; if (angle < 55) return 'close hauled'; if (angle < 78) return 'close reach'; if (angle < 105) return 'beam reach'; if (angle < 160) return 'broad reach'; return 'run'; }
   function tackAndPos(brg, windFrom) { const rel = ((windFrom - brg) % 360 + 360) % 360; const angle = rel > 180 ? 360 - rel : rel; return { tack: rel > 0 && rel < 180 ? 'starboard' : 'port', pos: pointOfSail(angle), angle }; }
@@ -394,25 +399,41 @@ const SA = (() => {
   // pts: [{lat, lon, t(ms)}]. Returns a rich analysis object.
   function analyze(pts) {
     pts = (pts || []).filter(p => p && isFinite(p.lat) && isFinite(p.lon) && isFinite(p.t)).sort((a, b) => a.t - b.t);
-    const out = { n: pts.length };
+    // drop GPS jumps: a fix that would need more than MAX_KN to reach from the last good fix is a bad fix, not boat speed.
+    // A Catalina 22 tops out near 6 knots, so 9 leaves room for a gust surf or a strong motor push.
+    const kept = []; let dropped = 0;
+    const ok = (a, b) => { const dt = (b.t - a.t) / 1000; return dt > 0 && dist(a, b) / dt * 1.94384 <= MAX_KN; };
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      // if the next fixes agree with this one, the earlier fixes it cannot reach were the bad ones (up to 3 of them)
+      const nx = pts.slice(i + 1, i + 4); const agree = nx.length >= 2 && nx.every(r => ok(p, r));
+      let pops = 0; while (kept.length && !ok(kept[kept.length - 1], p) && agree && pops < 3) { kept.pop(); dropped++; pops++; }
+      if (!kept.length || ok(kept[kept.length - 1], p)) kept.push(p); else dropped++;
+    }
+    pts = kept;
+    const out = { n: pts.length, dropped };
     if (pts.length < 2) return out;
     out.start = pts[0].t; out.end = pts[pts.length - 1].t; out.minutes = (out.end - out.start) / 60000;
-    // segments at gaps > 6 s
-    const segs = [[pts[0]]]; const gaps = [];
-    for (let i = 1; i < pts.length; i++) { const g = (pts[i].t - pts[i - 1].t) / 1000; if (g > 6) { segs.push([]); if (g > 20) gaps.push({ from: pts[i - 1].t, to: pts[i].t, sec: g, lat: pts[i - 1].lat, lon: pts[i - 1].lon }); } segs[segs.length - 1].push(pts[i]); }
+    // GPS dropouts: the recorder only stores a fix after the boat moves 3 m, so a quiet spell while drifting or stopped is not a dropout.
+    // A dropout is a gap of more than 30 s across which the boat also moved more than 30 m.
+    const gaps = [];
+    for (let i = 1; i < pts.length; i++) { const g = (pts[i].t - pts[i - 1].t) / 1000; if (g > 30 && dist(pts[i - 1], pts[i]) > 30) gaps.push({ from: pts[i - 1].t, to: pts[i].t, sec: g, lat: pts[i - 1].lat, lon: pts[i - 1].lon }); }
     out.gaps = gaps;
-    // distance (inside segments only, so a jump across a gap does not count)
-    let total = 0; segs.forEach(s => { for (let i = 1; i < s.length; i++) total += dist(s[i - 1], s[i]); }); out.nm = total / 1852;
+    // speed segments break at any gap over 12 s, so the first rough fixes after the GPS comes back cannot make a false top speed
+    const segs = [[pts[0]]];
+    for (let i = 1; i < pts.length; i++) { if ((pts[i].t - pts[i - 1].t) / 1000 > 12) segs.push([]); segs[segs.length - 1].push(pts[i]); }
+    // distance counts every step (slow drifting included) except the straight-line jump across a dropout
+    let total = 0; for (let i = 1; i < pts.length; i++) { const d = dist(pts[i - 1], pts[i]), dt = (pts[i].t - pts[i - 1].t) / 1000; if (dt > 0 && !(dt > 30 && d > 30)) total += d; } out.nm = total / 1852;
     // per point speed and heading over a 10 s trailing window inside its segment
     const samples = [];
-    segs.forEach(s => { for (let i = 1; i < s.length; i++) { let j = i; while (j > 0 && (s[i].t - s[j].t) < 10000) j--; const dt = (s[i].t - s[j].t) / 1000; if (dt < 4) continue; const d = dist(s[j], s[i]); samples.push({ t: s[i].t, kn: d / dt * 1.94384, hdg: bearing(s[j], s[i]), lat: s[i].lat, lon: s[i].lon }); } });
+    segs.forEach(s => { for (let i = 1; i < s.length; i++) { let j = i; while (j > 0 && (s[i].t - s[j].t) < 10000) j--; const dt = (s[i].t - s[j].t) / 1000; if (dt < 4) continue; const d = dist(s[j], s[i]); if (d / dt * 1.94384 > MAX_KN) continue; samples.push({ t: s[i].t, kn: d / dt * 1.94384, hdg: bearing(s[j], s[i]), lat: s[i].lat, lon: s[i].lon }); } });
     out.samples = samples;
     const moving = samples.filter(x => x.kn > 0.8);
     out.avgKn = out.minutes > 0 ? out.nm / (out.minutes / 60) : 0;
     out.avgMovingKn = moving.length ? moving.reduce((a, x) => a + x.kn, 0) / moving.length : 0;
     // peaks over 10 s and 30 s windows, gaps excluded
     let p10 = null, p30 = null;
-    segs.forEach(s => { for (let i = 1; i < s.length; i++) { for (const [win, key] of [[10, 'p10'], [30, 'p30']]) { let j = i; while (j > 0 && (s[i].t - s[j].t) < win * 1000) j--; const dt = (s[i].t - s[j].t) / 1000; if (dt < win * 0.8) continue; const kn = dist(s[j], s[i]) / dt * 1.94384; const rec = { kn, t: s[i].t, hdg: bearing(s[j], s[i]), lat: s[i].lat, lon: s[i].lon }; if (key === 'p10' && (!p10 || kn > p10.kn)) p10 = rec; if (key === 'p30' && (!p30 || kn > p30.kn)) p30 = rec; } } });
+    segs.forEach(s => { for (let i = 1; i < s.length; i++) { for (const [win, key] of [[10, 'p10'], [30, 'p30']]) { let j = i; while (j > 0 && (s[i].t - s[j].t) < win * 1000) j--; const dt = (s[i].t - s[j].t) / 1000; if (dt < win * 0.8) continue; const kn = dist(s[j], s[i]) / dt * 1.94384; if (kn > MAX_KN) continue; const rec = { kn, t: s[i].t, hdg: bearing(s[j], s[i]), lat: s[i].lat, lon: s[i].lon }; if (key === 'p10' && (!p10 || kn > p10.kn)) p10 = rec; if (key === 'p30' && (!p30 || kn > p30.kn)) p30 = rec; } } });
     out.peak10 = p10; out.peak30 = p30;
     // legs: group samples by stable heading; a leg breaks on a sustained heading change > 50 deg or a slow spell
     const legs = []; let cur = null;
@@ -420,9 +441,9 @@ const SA = (() => {
     for (const s of smooth) {
       const slow = s.skn < 1.5;
       if (!cur) { cur = { from: s.t, to: s.t, pts: [s], slow }; continue; }
-      const breakHdg = !slow && !cur.slow && angDiff(s.shdg, meanHeading(cur.pts.slice(-10).map(x => x.shdg))) > 50;
+      const settled = cur.pts.filter(x => s.t - x.t > 20000).slice(-15); const ref = settled.length ? settled : cur.pts.slice(0, 1); const breakHdg = !slow && !cur.slow && angDiff(s.shdg, meanHeading(ref.map(x => x.shdg))) > 50;
       const breakSlow = slow !== cur.slow;
-      const breakGap = s.t - cur.to > 20000;
+      const breakGap = s.t - cur.to > 30000;
       if (breakHdg || breakSlow || breakGap) { legs.push(cur); cur = { from: s.t, to: s.t, pts: [s], slow }; } else { cur.pts.push(s); cur.to = s.t; }
     }
     if (cur) legs.push(cur);
@@ -485,73 +506,48 @@ const SA = (() => {
   const endDot = s => /[.!?"'”]$/.test(s) ? s : s + '.';
   const tidy = s => endDot(cap(String(s || '').trim()));
 
-  // wind: {from, kn, gust} or null. qa: [{id, q, a}] answers to weave in. Returns plain text with blank lines between paragraphs.
+  // The sail overview: the summary paragraph, then one factual line per leg (each tack, gybe, motoring stretch or stop), waypoints in time order,
+  // and a single line about GPS dropouts. wind: {from, kn, gust} or null. Returns plain text with blank lines between paragraphs.
   function story(a, opts) {
-    opts = opts || {}; const tz = opts.tz; const w = opts.wind; const qa = opts.qa || []; const events = (opts.events || []).slice().sort((x, y) => x.t - y.t); const mot = a && a.n > 1 ? motoring(a, events) : [];
-    const ans = id => { const x = qa.find(q => q.id === id && q.a && q.a.trim()); return x ? ' ' + tidy(x.a) : ''; };
+    opts = opts || {}; const tz = opts.tz; const w = opts.wind; const events = (opts.events || []).slice().sort((x, y) => x.t - y.t); const mot = a && a.n > 1 ? motoring(a, events) : [];
     if (!a || a.n < 2) return 'Too short a track to describe.';
-    const P = [];
+    const P = []; const hasWind = w && w.from != null;
     const day = new Date(a.start).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', timeZone: tz });
     P.push(`${day}, ${fmtT(a.start, tz)} to ${fmtT(a.end, tz)}, ${Math.round(a.minutes)} minutes. ${a.nm.toFixed(1)} nautical miles (${(a.nm * 1.1508).toFixed(1)} statute), averaging ${a.avgMovingKn.toFixed(1)} knots while moving.` +
       (a.peak10 ? ` Top speed ${a.peak10.kn.toFixed(1)} knots` + (a.peak30 ? `, with ${a.peak30.kn.toFixed(1)} held over half a minute.` : '.') : '') +
       (a.peak10 && a.peak10.kn >= 5.6 ? ' That is at or near hull speed for a Catalina 22.' : ''));
-    if (w && w.from != null) P.push(`Wind was from the ${compassWord(w.from)} at about ${Math.round(w.kn)} knots` + (w.gust ? `, gusting ${Math.round(w.gust)}` : '') + '.');
-    // where the sail went
-    const vis = (a.visited || []).map(v => v.name); const uniq = vis.filter((v, i) => vis.indexOf(v) === i);
-    if (a.offLake) P.push('This sail was recorded away from Branched Oak Lake.');
-    else if (uniq.length > 1) P.push(`We started ${inPlace(a.startPlace)} and the sail took us through ${uniq.slice(1).join(', ').replace(/, ([^,]*)$/, ' and $1')}.`);
-    else if (uniq.length === 1) P.push(`The whole sail stayed ${inPlace(a.visited[0])}.`);
-    // the sail as chapters
-    const chapters = a.chapters || []; const peakT = a.peak10 ? a.peak10.t : null; const longest = a.longest;
-    // fold runs of three or more back-and-forth legs in one place into a single "worked back and forth" chapter
-    const ch = []; let i0 = 0;
-    while (i0 < chapters.length) {
-      let j = i0; const pid = place(chapters[i0].mid.lat, chapters[i0].mid.lon).id;
-      while (j + 1 < chapters.length && !chapters[j + 1].slow && !chapters[i0].slow && place(chapters[j + 1].mid.lat, chapters[j + 1].mid.lon).id === pid && angDiff(chapters[j + 1].hdg, chapters[j].hdg) > 90) j++;
-      if (j - i0 >= 2) { const grp = chapters.slice(i0, j + 1); const tot = grp.reduce((s, l) => s + l.min, 0); const kn = grp.reduce((s, l) => s + l.kn * l.min, 0) / tot; ch.push({ group: grp, from: grp[0].from, to: grp[grp.length - 1].to, min: tot, kn, maxKn: Math.max(...grp.map(l => l.maxKn)), start: grp[0].start, mid: grp[Math.floor(grp.length / 2)].mid, end: grp[grp.length - 1].end, slow: false, hdg: grp[0].hdg, hdg2: grp[1].hdg, nm: grp.reduce((s, l) => s + l.nm, 0) }); i0 = j + 1; }
-      else { ch.push(chapters[i0]); i0++; }
-    }
-    const verb = pos => ({ run: 'ran', 'broad reach': 'reached', 'beam reach': 'reached', 'close reach': 'reached', 'close hauled': 'beat' })[pos] || 'sailed';
-    let used = { peak: false, leg: false };
-    const gapsLeft = (a.gaps || []).slice();
-    ch.forEach((l, i) => {
-      const t0 = when(a, (l.from + l.to) / 2, i); const p1 = place(l.start.lat, l.start.lon), p2 = place(l.end.lat, l.end.lon);
-      let s;
-      if (l.slow) {
-        s = `${t0} we slowed to a near stop ${inPlace(place(l.mid.lat, l.mid.lon))} for about ${Math.max(1, Math.round(l.min))} minute${Math.round(l.min) === 1 ? '' : 's'}, a lull, a sail change, or motoring in close.`;
-        if (a.slowest && a.slowest.from >= l.from && a.slowest.from <= l.to) s += ans('slow');
-      } else if (l.group) {
-        let posTxt = '';
-        if (w && w.from != null) { const A = tackAndPos(l.hdg, w.from), B = tackAndPos(l.hdg2, w.from); const nm = tp => tp.pos === 'too close to the wind' ? 'pointed nearly into the wind' : `${tp.pos} on ${tp.tack} tack`; posTxt = `, ${nm(A)} one way and ${nm(B)} the other`; }
-        s = `${t0} we worked back and forth ${inPlace(p1)} for ${Math.round(l.min)} minutes, ${l.group.length} legs between ${compassWord(l.hdg)} and ${compassWord(l.hdg2)} at around ${l.kn.toFixed(1)} knots${posTxt}.`;
-      } else if (inMotoring((l.from + l.to) / 2, mot)) {
-        const where = p1.id === p2.id ? inPlace(p1) : `from ${p1.name} ${toPlace(p2)}`;
-        s = `${t0} we motored ${compassWord(l.hdg)} ${where} at ${l.kn.toFixed(1)} knots` + (l.min >= 2 ? ` for ${Math.round(l.min)} minutes.` : '.');
-      } else {
-        const where = p1.id === p2.id ? inPlace(p1) : `from ${p1.name} ${toPlace(p2)}`;
-        let pos = '', v = 'sailed';
-        if (w && w.from != null) { const tp = tackAndPos(l.hdg, w.from); pos = tp.pos === 'too close to the wind' ? ', pointed nearly into the wind' : ` on a ${tp.tack} tack ${tp.pos}`; v = verb(tp.pos); }
-        s = `${t0} we ${v} ${compassWord(l.hdg)} ${where}, making ${l.kn.toFixed(1)} knots${pos}` + (l.min >= 2 ? ` for ${Math.round(l.min)} minutes.` : '.');
-      }
-      if (!l.slow) {
-        if (peakT != null && peakT >= l.from - 15000 && peakT <= l.to + 15000 && !used.peak) { used.peak = true; s += ` That stretch held the fastest water of the day, ${a.peak10.kn.toFixed(1)} knots, ${when(a, peakT, 1).toLowerCase()}.` + ans('peak'); }
-        if (longest && longest.from >= l.from && longest.to <= l.to && !used.leg) { used.leg = true; if (ch.length > 1 && !l.group) s += ' It was the longest run of the sail.'; s += ans('leg'); }
-      }
-      // waypoints logged during or just after this chapter
-      const nextFrom = ch[i + 1] ? ch[i + 1].from : a.end + 1;
-      events.filter(e => e.t >= (i === 0 ? 0 : l.from) && e.t < nextFrom).forEach(e => { const pl = e.lat != null ? ' ' + inPlace(place(e.lat, e.lon)) : ''; s += e.kind === 'hoist' ? ` We hoisted the sails${pl} at ${fmtT(e.t, tz)}.` : e.kind === 'drop' ? ` We dropped the sails${pl} at ${fmtT(e.t, tz)}.` : ` At ${fmtT(e.t, tz)}${pl}: ${cap(String(e.name || 'waypoint').trim())}.`; });
-      // any recording gap that ended inside or right after this chapter
-      const next = ch[i + 1]; const limit = next ? next.from : a.end + 1;
-      while (gapsLeft.length && gapsLeft[0].to <= limit + 20000) { const g = gapsLeft.shift(); const mins = Math.round(g.sec / 60); s += ` The recording paused ${inPlace(place(g.lat, g.lon))} for about ${mins >= 1 ? mins + ' minute' + (mins === 1 ? '' : 's') : Math.round(g.sec) + ' seconds'}` + (g === a.gaps[0] ? ', so the distance and the peaks may be a little understated.' : '.') + (g === a.gaps[0] ? ans('gap') : ''); }
-      P.push(s);
+    if (hasWind) P.push(`Wind from the ${compassWord(w.from)} at about ${Math.round(w.kn)} knots` + (w.gust ? `, gusting ${Math.round(w.gust)}` : '') + '.');
+    if (a.offLake) P.push('Recorded away from Branched Oak Lake.');
+    // legs, with a GPS dropout no longer splitting one leg into several: neighbours on the same heading and the same footing are joined
+    const kindOf = l => l.slow ? 'stop' : inMotoring((l.from + l.to) / 2, mot) ? 'motor' : 'sail';
+    const legs = [];
+    (a.legs || []).forEach(l => {
+      const k = kindOf(l), prev = legs[legs.length - 1];
+      if (prev && prev.kind === k && (k === 'stop' || angDiff(prev.hdg, l.hdg) < 35)) {
+        const m = prev.min + l.min; prev.kn = (prev.kn * prev.min + l.kn * l.min) / m; prev.hdg = meanHeading([prev.hdg, l.hdg]); prev.min = m;
+        prev.maxKn = Math.max(prev.maxKn, l.maxKn); prev.nm += l.nm; prev.to = l.to; prev.end = l.end;
+      } else legs.push({ kind: k, from: l.from, to: l.to, min: l.min, hdg: l.hdg, kn: l.kn, maxKn: l.maxKn, nm: l.nm, start: l.start, end: l.end, mid: l.mid });
     });
-    if (!ch.length) events.forEach(e => { const pl = e.lat != null ? ' ' + inPlace(place(e.lat, e.lon)) : ''; P.push(e.kind === 'hoist' ? `We hoisted the sails${pl} at ${fmtT(e.t, tz)}.` : e.kind === 'drop' ? `We dropped the sails${pl} at ${fmtT(e.t, tz)}.` : `At ${fmtT(e.t, tz)}${pl}: ${cap(String(e.name || 'waypoint').trim())}.`); });
-    gapsLeft.forEach(g => { const mins = Math.round(g.sec / 60); P.push(`The recording paused ${inPlace(place(g.lat, g.lon))} for about ${mins} minutes.` + (g === a.gaps[0] ? ans('gap') : '')); });
-    if (!used.peak && a.peak10) P.push(`Our fastest water was ${a.peak10.kn.toFixed(1)} knots, ${when(a, a.peak10.t, 1).toLowerCase()}, ${inPlace(place(a.peak10.lat, a.peak10.lon))}.` + ans('peak'));
-    if (!used.leg && ans('leg')) P.push(ans('leg').trim());
-    if (a.turns && a.turns.length && w && w.from != null) { const kinds = a.turns.map(t => turnKind(t, w.from)); const nt = kinds.filter(k => k === 'tack').length, ng = kinds.filter(k => k === 'gybe').length; const parts = []; if (nt) parts.push(nt + (nt === 1 ? ' tack' : ' tacks')); if (ng) parts.push(ng + (ng === 1 ? ' gybe' : ' gybes')); if (parts.length) P.push(`${parts.join(' and ')} in all.`); }
-    if (a.startFinishNm > 0.2) P.push(`The recording ended ${inPlace(a.endPlace)}, ${a.startFinishNm.toFixed(1)} nm ${compassWord(a.startFinishBrg)} of where it began, so it either started after leaving the slip or stopped before we were back.`);
-    if (ans('day')) P.push(ans('day').trim());
+    const where = l => { const p1 = place(l.start.lat, l.start.lon), p2 = place(l.end.lat, l.end.lon); return p1.id === p2.id ? inPlace(p1) : `from ${p1.name} to ${p2.name}`; };
+    const mins = m => Math.max(1, Math.round(m)) + ' min';
+    const items = legs.map((l, i) => {
+      const head = `${i + 1}. ${fmtT(l.from, tz)} to ${fmtT(l.to, tz)}, ${mins((l.to - l.from) / 60000)}.`;
+      if (l.kind === 'stop') return { t: l.from, s: `${head} Stopped or drifting ${inPlace(place(l.mid.lat, l.mid.lon))}.` };
+      const speed = ` ${l.kn.toFixed(1)} kn average, ${l.maxKn.toFixed(1)} max, ${l.nm.toFixed(2)} nm.`;
+      if (l.kind === 'motor') return { t: l.from, s: `${head} Motoring ${compass(l.hdg)} ${where(l)}.${speed}` };
+      let pos = '';
+      if (hasWind) { const tp = tackAndPos(l.hdg, w.from); pos = tp.pos === 'too close to the wind' ? ' Pointed nearly into the wind.' : ` ${cap(tp.tack)} tack, ${tp.pos}.`; }
+      return { t: l.from, s: `${head} Heading ${compass(l.hdg)} ${where(l)}.${pos}${speed}` };
+    });
+    events.forEach(e => { const pl = e.lat != null ? ', ' + inPlace(place(e.lat, e.lon)) : ''; const what = e.kind === 'hoist' ? 'Hoisted sails' : e.kind === 'drop' ? 'Dropped sails' : cap(String(e.name || 'Waypoint').trim()); items.push({ t: e.t, s: `${fmtT(e.t, tz)}. ${what}${pl}.`, ev: true }); });
+    items.sort((x, y) => x.t - y.t || (x.ev ? 1 : -1));
+    if (items.length) P.push(items.map(x => x.s).join('\n'));
+    // totals
+    const T = [];
+    if (a.turns && a.turns.length && hasWind) { const kinds = a.turns.map(t => turnKind(t, w.from)); const nt = kinds.filter(k => k === 'tack').length, ng = kinds.filter(k => k === 'gybe').length; if (nt) T.push(nt + (nt === 1 ? ' tack' : ' tacks')); if (ng) T.push(ng + (ng === 1 ? ' gybe' : ' gybes')); }
+    if (T.length) P.push(cap(T.join(' and ')) + '.');
+    const gaps = a.gaps || [];
+    if (gaps.length) { const sec = gaps.reduce((s, g) => s + g.sec, 0); P.push(`GPS signal dropped ${gaps.length === 1 ? 'once' : gaps.length + ' times'}, about ${sec >= 90 ? Math.round(sec / 60) + ' minutes' : Math.round(sec) + ' seconds'} in all. Distance and speeds leave out those stretches.`); }
     return P.join('\n\n');
   }
 
@@ -573,7 +569,7 @@ const SA = (() => {
 <script>
 (function () {
   'use strict';
-  const APP_VERSION = '5.8';
+  const APP_VERSION = '5.9';
   const LAKE = { lat: 40.975, lon: -96.870, zoom: 14 };
   const DRAFT_FT = 2.5;
   const CONTOUR_URL = "https://services5.arcgis.com/IOshH1zLrIieqrNk/arcgis/rest/services/LakeContours/FeatureServer/0/query"
@@ -607,11 +603,13 @@ const SA = (() => {
   /* ---------- Map ---------- */
   const map = L.map('map', { zoomControl: false, attributionControl: true, tap: false }).setView([LAKE.lat, LAKE.lon], LAKE.zoom);
   const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagery: Esri' });
-  const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' });
+  const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors', className: 'night-tiles' });
+  // contours sit in their own pane below every track and route line
+  map.createPane('contours').style.zIndex = 350;
   let base = store.get('basemap', 'sat') === 'osm' ? osm : sat;
-  base.addTo(map);
+  base.addTo(map); $('#map').classList.toggle('night', base === osm);
   $('#btn-layer').addEventListener('click', () => {
-    map.removeLayer(base); base = (base === sat) ? osm : sat; base.addTo(map); store.set('basemap', base === sat ? 'sat' : 'osm');
+    map.removeLayer(base); base = (base === sat) ? osm : sat; base.addTo(map); store.set('basemap', base === sat ? 'sat' : 'osm'); $('#map').classList.toggle('night', base === osm);
     contourLayer && contourLayer.bringToFront();
   });
 
@@ -628,6 +626,7 @@ const SA = (() => {
     if (contourLayer) { map.removeLayer(contourLayer); map.removeLayer(labelLayer); }
     labelLayer = L.layerGroup();
     contourLayer = L.geoJSON(gj, {
+      pane: 'contours',
       style: f => { const d = f.properties.Depth; return { color: depthColor(d), weight: d <= 6 ? 3 : 1.8, opacity: d <= 6 ? 1 : .85 }; },
       onEachFeature: (f, layer) => {
         const d = f.properties.Depth, e = f.properties.Elevation;
@@ -854,8 +853,8 @@ const SA = (() => {
   function logWaypoint(kind, name) {
     const e = { id: newId(), t: Date.now(), lat: lastPos ? lastPos.lat : null, lon: lastPos ? lastPos.lon : null, kind, name: name || '' };
     trackEvents.push(e); saveCurrentTrack();
-    // the live line changes color: green under sail, black under power
-    if (kind === 'hoist' || kind === 'drop') { const ll = lastPos ? [[lastPos.lat, lastPos.lon]] : []; trackLine = L.polyline(ll, { color: kind === 'hoist' ? '#5fd38d' : '#111', weight: 3, opacity: .9 }).addTo(liveLayer); }
+    // the live line changes color: light blue under sail, white under power
+    if (kind === 'hoist' || kind === 'drop') { const ll = lastPos ? [[lastPos.lat, lastPos.lon]] : []; trackLine = L.polyline(ll, { color: kind === 'hoist' ? '#4fb2e7' : '#e8edf2', weight: 3, opacity: .95 }).addTo(liveLayer); }
     if (lastPos) L.circleMarker([lastPos.lat, lastPos.lon], { radius: 5, color: '#0d2c42', weight: 1.5, fillColor: '#ffcc4d', fillOpacity: 1 }).addTo(liveLayer).bindPopup(fmtTime(new Date(e.t)) + ' · ' + eventLabel(e), { className: 'turnpop' });
     toast(eventLabel(e) + ' logged');
   }
@@ -875,26 +874,26 @@ const SA = (() => {
   let shownSail = null, sailLayer = L.layerGroup().addTo(map), windOverride = null;
   function showSail(t) {
     sailLayer.clearLayers(); shownSail = t; windOverride = null;
-    $('#sailbar').classList.toggle('hidden', !t); $('#heelstrip').classList.toggle('hidden', !!t); $('#sb-story').classList.add('hidden'); $('#sb-toggle').textContent = 'Show story';
+    $('#sailbar').classList.toggle('hidden', !t); $('#heelstrip').classList.toggle('hidden', !!t); $('#sb-story').classList.add('hidden'); $('#sb-toggle').textContent = 'Show overview';
     if (!t) { setWindState(); return; }
     const a = analysisOf(t); const mot = SA.motoring(a, t.events || []);
-    // the track, green under sail and black under power
+    // the track, light blue under sail and white under power, each on a soft dark edge
     const pts = t.pts; let seg = [], segMot = null;
-    const flush = () => { if (seg.length > 1) { if (segMot) L.polyline(seg, { color: '#fff', weight: 5, opacity: .55 }).addTo(sailLayer); L.polyline(seg, { color: segMot ? '#111' : '#5fd38d', weight: 3, opacity: .95 }).addTo(sailLayer); } };
+    const flush = () => { if (seg.length > 1) { L.polyline(seg, { color: '#0b1a2e', weight: 6, opacity: .45 }).addTo(sailLayer); L.polyline(seg, { color: segMot ? '#e8edf2' : '#4fb2e7', weight: 3, opacity: .95 }).addTo(sailLayer); } };
     pts.forEach(p => { const m = mot.some(v => p.t >= v.from && p.t <= v.to); if (segMot === null) segMot = m; if (m !== segMot) { const last = seg[seg.length - 1]; flush(); seg = last ? [last] : []; segMot = m; } seg.push([p.lat, p.lon]); }); flush();
     // turns
-    (a.turns || []).forEach(tr => { const kind = SA.turnKind(tr, t.wind ? t.wind.from : null); L.circleMarker([tr.lat, tr.lon], { radius: 5, color: '#0d2c42', weight: 1.5, fillColor: '#5fd38d', fillOpacity: 1 }).addTo(sailLayer).bindPopup(`${fmtTime(new Date(tr.t))} · ${kind.charAt(0).toUpperCase() + kind.slice(1)} (${SA.compass(tr.from)} to ${SA.compass(tr.to)})`, { className: 'turnpop' }); });
+    (a.turns || []).forEach(tr => { const kind = SA.turnKind(tr, t.wind ? t.wind.from : null); L.circleMarker([tr.lat, tr.lon], { radius: 5, color: '#0d2c42', weight: 1.5, fillColor: '#4fb2e7', fillOpacity: 1 }).addTo(sailLayer).bindPopup(`${fmtTime(new Date(tr.t))} · ${kind.charAt(0).toUpperCase() + kind.slice(1)} (${SA.compass(tr.from)} to ${SA.compass(tr.to)})`, { className: 'turnpop' }); });
     // waypoints
     (t.events || []).forEach(e => { if (e.lat == null) return; L.circleMarker([e.lat, e.lon], { radius: 6, color: '#0d2c42', weight: 1.5, fillColor: '#ffcc4d', fillOpacity: 1 }).addTo(sailLayer).bindPopup(`${fmtTime(new Date(e.t))} · ${esc(eventLabel(e))}`, { className: 'turnpop' }); });
     // title, story, and the wind as it was
     $('#sb-name').textContent = t.name || new Date(t.started).toLocaleDateString();
-    $('#sb-sub').textContent = new Date(t.started).toLocaleDateString() + ' ' + fmtTime(new Date(t.started)) + ' to ' + fmtTime(new Date(t.ended)) + ' · ' + a.nm.toFixed(1) + ' nm' + (t.wind ? ' · wind ' + compass(t.wind.from) + ' ' + Math.round(t.wind.kn) + ' kn' : '') + ' · tap for the story';
+    $('#sb-sub').textContent = new Date(t.started).toLocaleDateString() + ' ' + fmtTime(new Date(t.started)) + ' to ' + fmtTime(new Date(t.ended)) + ' · ' + a.nm.toFixed(1) + ' nm' + (t.wind ? ' · wind ' + compass(t.wind.from) + ' ' + Math.round(t.wind.kn) + ' kn' : '') + ' · tap for the overview';
     $('#sb-story').textContent = t.story || liveStory(t);
     if (t.wind && t.wind.from != null) windOverride = { from: t.wind.from, kn: t.wind.kn };
     setWindState();
     const b = L.latLngBounds(pts.map(p => [p.lat, p.lon])); map.fitBounds(b, { padding: [30, 30] }); followMe = false;
   }
-  const sbToggle = () => { const st = $('#sb-story'); st.classList.toggle('hidden'); $('#sb-toggle').textContent = st.classList.contains('hidden') ? 'Show story' : 'Hide story'; };
+  const sbToggle = () => { const st = $('#sb-story'); st.classList.toggle('hidden'); $('#sb-toggle').textContent = st.classList.contains('hidden') ? 'Show overview' : 'Hide overview'; };
   $('#sb-head').addEventListener('click', sbToggle); $('#sb-toggle').addEventListener('click', sbToggle);
   $('#sb-close').addEventListener('click', () => showSail(null));
 
