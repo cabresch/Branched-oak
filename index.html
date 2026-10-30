@@ -506,10 +506,9 @@ const SA = (() => {
   const endDot = s => /[.!?"'”]$/.test(s) ? s : s + '.';
   const tidy = s => endDot(cap(String(s || '').trim()));
 
-  // The sail overview: the summary paragraph, then one factual line per leg (each tack, gybe, motoring stretch or stop), waypoints in time order,
-  // and a single line about GPS dropouts. wind: {from, kn, gust} or null. Returns plain text with blank lines between paragraphs.
+  // The sail overview: the summary paragraph, the wind, and the count of tacks and gybes. wind: {from, kn, gust} or null. Returns plain text with blank lines between paragraphs.
   function story(a, opts) {
-    opts = opts || {}; const tz = opts.tz; const w = opts.wind; const events = (opts.events || []).slice().sort((x, y) => x.t - y.t); const mot = a && a.n > 1 ? motoring(a, events) : [];
+    opts = opts || {}; const tz = opts.tz; const w = opts.wind;
     if (!a || a.n < 2) return 'Too short a track to describe.';
     const P = []; const hasWind = w && w.from != null;
     const day = new Date(a.start).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', timeZone: tz });
@@ -517,37 +516,10 @@ const SA = (() => {
       (a.peak10 ? ` Top speed ${a.peak10.kn.toFixed(1)} knots` + (a.peak30 ? `, with ${a.peak30.kn.toFixed(1)} held over half a minute.` : '.') : '') +
       (a.peak10 && a.peak10.kn >= 5.6 ? ' That is at or near hull speed for a Catalina 22.' : ''));
     if (hasWind) P.push(`Wind from the ${compassWord(w.from)} at about ${Math.round(w.kn)} knots` + (w.gust ? `, gusting ${Math.round(w.gust)}` : '') + '.');
-    if (a.offLake) P.push('Recorded away from Branched Oak Lake.');
-    // legs, with a GPS dropout no longer splitting one leg into several: neighbours on the same heading and the same footing are joined
-    const kindOf = l => l.slow ? 'stop' : inMotoring((l.from + l.to) / 2, mot) ? 'motor' : 'sail';
-    const legs = [];
-    (a.legs || []).forEach(l => {
-      const k = kindOf(l), prev = legs[legs.length - 1];
-      if (prev && prev.kind === k && (k === 'stop' || angDiff(prev.hdg, l.hdg) < 35)) {
-        const m = prev.min + l.min; prev.kn = (prev.kn * prev.min + l.kn * l.min) / m; prev.hdg = meanHeading([prev.hdg, l.hdg]); prev.min = m;
-        prev.maxKn = Math.max(prev.maxKn, l.maxKn); prev.nm += l.nm; prev.to = l.to; prev.end = l.end;
-      } else legs.push({ kind: k, from: l.from, to: l.to, min: l.min, hdg: l.hdg, kn: l.kn, maxKn: l.maxKn, nm: l.nm, start: l.start, end: l.end, mid: l.mid });
-    });
-    const where = l => { const p1 = place(l.start.lat, l.start.lon), p2 = place(l.end.lat, l.end.lon); return p1.id === p2.id ? inPlace(p1) : `from ${p1.name} to ${p2.name}`; };
-    const mins = m => Math.max(1, Math.round(m)) + ' min';
-    const items = legs.map((l, i) => {
-      const head = `${i + 1}. ${fmtT(l.from, tz)} to ${fmtT(l.to, tz)}, ${mins((l.to - l.from) / 60000)}.`;
-      if (l.kind === 'stop') return { t: l.from, s: `${head} Stopped or drifting ${inPlace(place(l.mid.lat, l.mid.lon))}.` };
-      const speed = ` ${l.kn.toFixed(1)} kn average, ${l.maxKn.toFixed(1)} max, ${l.nm.toFixed(2)} nm.`;
-      if (l.kind === 'motor') return { t: l.from, s: `${head} Motoring ${compass(l.hdg)} ${where(l)}.${speed}` };
-      let pos = '';
-      if (hasWind) { const tp = tackAndPos(l.hdg, w.from); pos = tp.pos === 'too close to the wind' ? ' Pointed nearly into the wind.' : ` ${cap(tp.tack)} tack, ${tp.pos}.`; }
-      return { t: l.from, s: `${head} Heading ${compass(l.hdg)} ${where(l)}.${pos}${speed}` };
-    });
-    events.forEach(e => { const pl = e.lat != null ? ', ' + inPlace(place(e.lat, e.lon)) : ''; const what = e.kind === 'hoist' ? 'Hoisted sails' : e.kind === 'drop' ? 'Dropped sails' : cap(String(e.name || 'Waypoint').trim()); items.push({ t: e.t, s: `${fmtT(e.t, tz)}. ${what}${pl}.`, ev: true }); });
-    items.sort((x, y) => x.t - y.t || (x.ev ? 1 : -1));
-    if (items.length) P.push(items.map(x => x.s).join('\n'));
     // totals
     const T = [];
     if (a.turns && a.turns.length && hasWind) { const kinds = a.turns.map(t => turnKind(t, w.from)); const nt = kinds.filter(k => k === 'tack').length, ng = kinds.filter(k => k === 'gybe').length; if (nt) T.push(nt + (nt === 1 ? ' tack' : ' tacks')); if (ng) T.push(ng + (ng === 1 ? ' gybe' : ' gybes')); }
     if (T.length) P.push(cap(T.join(' and ')) + '.');
-    const gaps = a.gaps || [];
-    if (gaps.length) { const sec = gaps.reduce((s, g) => s + g.sec, 0); P.push(`GPS signal dropped ${gaps.length === 1 ? 'once' : gaps.length + ' times'}, about ${sec >= 90 ? Math.round(sec / 60) + ' minutes' : Math.round(sec) + ' seconds'} in all. Distance and speeds leave out those stretches.`); }
     return P.join('\n\n');
   }
 
@@ -569,7 +541,7 @@ const SA = (() => {
 <script>
 (function () {
   'use strict';
-  const APP_VERSION = '5.9';
+  const APP_VERSION = '6.0';
   const LAKE = { lat: 40.975, lon: -96.870, zoom: 14 };
   const DRAFT_FT = 2.5;
   const CONTOUR_URL = "https://services5.arcgis.com/IOshH1zLrIieqrNk/arcgis/rest/services/LakeContours/FeatureServer/0/query"
@@ -862,10 +834,10 @@ const SA = (() => {
   $('#btn-wp').addEventListener('click', () => {
     if (!recording) return; const box = $('#rsheet-box'); $('#rsheet').classList.remove('hidden');
     box.innerHTML = `<h2>Waypoint</h2><div class="small muted" style="margin-bottom:10px">${fmtTime(new Date())}${lastPos ? ' · ' + SA.place(lastPos.lat, lastPos.lon).name : ''}</div>
-      <button class="btn primary wp-opt" data-wp="hoist">Hoisted sails</button><button class="btn primary wp-opt" data-wp="drop">Dropped sails</button><button class="btn wp-opt" data-wp="other">Other</button>
-      <div id="wp-other" class="hidden"><input type="text" id="wp-name" placeholder="for example: reefed the main, lunch stop" autocomplete="off"><div class="toolbar" style="margin-top:8px"><button class="btn primary" id="wp-save">Save waypoint</button></div></div>
+      <button class="btn primary wp-opt" data-wp="hoist">Hoisted sails</button><button class="btn primary wp-opt" data-wp="drop">Dropped sails</button><button class="btn primary wp-opt" data-wp="name:Heave To">Heave To</button><button class="btn primary wp-opt" data-wp="name:Reefed">Reefed</button><button class="btn primary wp-opt" data-wp="name:Shook Out Reef">Shook Out Reef</button><button class="btn wp-opt" data-wp="other">Other</button>
+      <div id="wp-other" class="hidden"><input type="text" id="wp-name" placeholder="for example: lunch stop, crew change" autocomplete="off"><div class="toolbar" style="margin-top:8px"><button class="btn primary" id="wp-save">Save waypoint</button></div></div>
       <div class="toolbar"><button class="btn" id="wp-cancel">Cancel</button></div>`;
-    box.querySelectorAll('[data-wp]').forEach(b => b.addEventListener('click', () => { if (b.dataset.wp === 'other') { box.querySelector('#wp-other').classList.remove('hidden'); box.querySelector('#wp-name').focus(); return; } logWaypoint(b.dataset.wp); closeRouteSheet(); }));
+    box.querySelectorAll('[data-wp]').forEach(b => b.addEventListener('click', () => { if (b.dataset.wp === 'other') { box.querySelector('#wp-other').classList.remove('hidden'); box.querySelector('#wp-name').focus(); return; } if (b.dataset.wp.startsWith('name:')) logWaypoint('other', b.dataset.wp.slice(5)); else logWaypoint(b.dataset.wp); closeRouteSheet(); }));
     box.querySelector('#wp-save').addEventListener('click', () => { const n = box.querySelector('#wp-name').value.trim(); if (!n) { box.querySelector('#wp-name').focus(); return; } logWaypoint('other', n); closeRouteSheet(); });
     box.querySelector('#wp-cancel').addEventListener('click', closeRouteSheet);
   });
