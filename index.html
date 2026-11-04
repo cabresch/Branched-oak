@@ -111,6 +111,34 @@
   .nudge-title { font-size: 13px; margin-bottom: 8px; }
   .nudge-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; align-items: center; justify-items: center; }
   .nudge-grid button[data-n] { width: 52px; height: 44px; font-size: 22px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; }
+  /* Battery saver screen while recording: pure black, big numbers, no map drawing behind it */
+  #saver { position: fixed; inset: 0; z-index: 880; background: #000; color: #e8eef2; display: flex; flex-direction: column; gap: 12px; padding: calc(var(--safe-top) + 14px) 18px calc(var(--safe-bottom) + 16px); font-variant-numeric: tabular-nums; }
+  #saver.hidden { display: none; }
+  #sv-top { display: flex; justify-content: space-between; font-size: 14px; color: #8fa1ad; }
+  #sv-top .rec { color: #ff5a5a; font-weight: 700; letter-spacing: .06em; }
+  #sv-heel { text-align: center; color: #5fd38d; margin-top: 6px; }
+  #sv-heel .v { font-size: min(30vw, 150px); font-weight: 800; line-height: .9; letter-spacing: -.02em; }
+  #sv-heel .z { font-size: 22px; font-weight: 600; margin-top: 4px; }
+  #sv-heel .side { font-size: 14px; color: #8fa1ad; }
+  #sv-heel-start { margin: 18px auto 0; display: block; font: 600 16px inherit; color: #e8eef2; background: #11181e; border: 1px solid #2a3640; border-radius: 14px; padding: 12px 18px; }
+  #sv-gauge { position: relative; height: 12px; border-radius: 6px; margin: 4px 4px 0; background: linear-gradient(90deg, #2f8f5a 0 50%, #d4a106 50% 70%, #c8202f 70% 100%); }
+  #sv-gauge i { position: absolute; top: -5px; width: 4px; height: 22px; background: #e8eef2; border-radius: 2px; transform: translateX(-2px); left: 0; }
+  #sv-gl { display: flex; justify-content: space-between; font-size: 11px; color: #8fa1ad; padding: 2px 2px 0; }
+  #sv-sog { display: flex; justify-content: center; align-items: baseline; gap: 8px; border-top: 1px solid #1d2a33; padding-top: 8px; }
+  #sv-sog b { font-size: 64px; font-weight: 800; line-height: 1; }
+  #sv-sog span { color: #8fa1ad; font-size: 18px; text-transform: uppercase; letter-spacing: .08em; }
+  #saver.noheel #sv-sog b { font-size: min(30vw, 150px); }
+  #sv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #sv-grid > div { border-top: 1px solid #1d2a33; padding-top: 6px; min-width: 0; }
+  #sv-grid .l { font-size: 11px; color: #8fa1ad; text-transform: uppercase; letter-spacing: .1em; }
+  #sv-grid .v { font-size: 28px; font-weight: 700; line-height: 1.15; }
+  #sv-grid .v small { font-size: 15px; color: #8fa1ad; font-weight: 500; margin-left: 3px; }
+  #sv-btns { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  #sv-btns button { font: 600 16px -apple-system, BlinkMacSystemFont, sans-serif; color: #e8eef2; background: #11181e; border: 1px solid #1d2a33; border-radius: 14px; padding: 16px 4px; }
+  #sv-wp { color: #ffd84a !important; border-color: #4a3f12 !important; }
+  #sv-stop { color: #ff5a5a !important; border-color: #4a1a1a !important; }
+  #sv-stop.arm { background: #3a0d0d !important; }
+  body.saver-on #status { position: fixed; z-index: 950; bottom: calc(var(--safe-bottom) + 96px); }
   #rsheet { position: fixed; inset: 0; z-index: 890; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; }
   #sheet { position: fixed; inset: 0; z-index: 900; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; }
   .sheet-box { background: var(--panel); border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; padding: 16px 16px calc(var(--safe-bottom) + 16px); width: 100%; max-height: 90%; overflow: auto; }
@@ -276,6 +304,7 @@
         </div>
         <div class="card" id="marks-list"><span class="muted">No marks yet. On the map, tap the pin button or press and hold on the water.</span></div>
         <h3>Sail log</h3>
+        <div class="toolbar" style="margin:-4px 0 8px"><label class="btn sm">Import GPX<input type="file" id="gpx-file" accept=".gpx,application/gpx+xml,application/xml,text/xml" style="display:none"></label><span class="small muted" style="align-self:center">A track from a watch or another app</span></div>
         <div class="card" id="tracks-list"><span class="muted">No sails yet. Tap the record button on the map to start one.</span></div>
         <p class="small muted">Marks and sails are kept on this phone and, once you sign in on the Info tab, in the shared crew list that both phones see. Share and Import are still here as a file backup.</p>
       </div>
@@ -352,6 +381,20 @@
     </div>
   </div>
   <button id="updatebar" class="hidden" style="position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--safe-top) + 52px);z-index:950;background:var(--accent);color:#1a1a1a;border:0;border-radius:20px;padding:8px 14px;font-weight:600;font-size:13px;box-shadow:0 2px 10px rgba(0,0,0,.4)">Update available, tap to reload</button>
+  <div id="saver" class="hidden" aria-label="Recording screen">
+    <div id="sv-top"><span class="rec">● REC</span><span id="sv-time">0:00</span><span id="sv-gps">GPS</span></div>
+    <div id="sv-heelbox"><div id="sv-heel"><div class="v" id="sv-heel-v">–</div><div class="z" id="sv-heel-z"></div><div class="side" id="sv-heel-s"></div></div>
+      <div id="sv-gauge"><i id="sv-gauge-i"></i></div><div id="sv-gl"><span>0</span><span>15</span><span>20</span><span>30°</span></div></div>
+    <button id="sv-heel-start" class="hidden">Start Heel-O-Meter</button>
+    <div id="sv-sog"><b id="sv-sog-v">–</b><span>knots</span></div>
+    <div id="sv-grid">
+      <div><div class="l">Course</div><div class="v" id="sv-cog">–</div></div>
+      <div><div class="l">Distance</div><div class="v" id="sv-dist">0.0<small>nm</small></div></div>
+      <div><div class="l">Wind forecast</div><div class="v" id="sv-wind">–</div></div>
+      <div><div class="l">Point of sail</div><div class="v" id="sv-pos" style="font-size:20px">–</div></div>
+    </div>
+    <div id="sv-btns"><button id="sv-wp">Waypoint</button><button id="sv-map">Map</button><button id="sv-stop">Stop</button></div>
+  </div>
   <div id="rsheet" class="hidden">
     <div class="sheet-box" id="rsheet-box"></div>
   </div>
@@ -431,9 +474,39 @@ const SA = (() => {
     const moving = samples.filter(x => x.kn > 0.8);
     out.avgKn = out.minutes > 0 ? out.nm / (out.minutes / 60) : 0;
     out.avgMovingKn = moving.length ? moving.reduce((a, x) => a + x.kn, 0) / moving.length : 0;
-    // peaks over 10 s and 30 s windows, gaps excluded
+    // Top speed. Phone GPS on a boat scatters and its fix times jitter: one fix lands 10 to 40 m off, or the fixes bunch up and then
+    // catch up, and either makes a false burst that still looks possible (8.5 kn on Oct 31, 6.1 kn while motoring at 4 kn on Oct 20).
+    // So the peaks use a cleaned copy of the track: fixes reported worse than 20 m are left out, and so is any fix that sits well off
+    // where its neighbours put it (a spike). A peak window needs at least 4 fixes with no step longer than 5 s. Its speed is the lower of
+    // the straight line speed and the median of its steps, and a 10 s peak may not beat the 30 s around it by more than 0.7 kn.
+    // Nothing over PEAK_MAX counts. When the phone stored its own Doppler speed (spd, recorded from v6.1), the window's median of that is used.
+    const PEAK_MAX = 7.5;
+    const good = pts.filter(p => !(p.acc > 20));
+    const clean = [];
+    for (let i = 0; i < good.length; i++) {
+      const p = good[i], a = clean[clean.length - 1], b = good[i + 1];
+      if (a && b && (b.t - a.t) <= 20000 && b.t > a.t) {
+        const f = (p.t - a.t) / (b.t - a.t); const q = { lat: a.lat + (b.lat - a.lat) * f, lon: a.lon + (b.lon - a.lon) * f };
+        if (dist(p, q) > Math.max(12, 0.6 * dist(a, b))) continue;
+      }
+      clean.push(p);
+    }
+    const csegs = [[]];
+    clean.forEach((p, i) => { if (i && (p.t - clean[i - 1].t) / 1000 > 5) csegs.push([]); csegs[csegs.length - 1].push(p); });
+    const median = xs => { const v = xs.slice().sort((x, y) => x - y); return v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2; };
+    const dispKn = (s, t0, t1) => { const j = s.findIndex(x => x.t >= t0); let i = -1; for (let k = s.length - 1; k >= 0; k--) if (s[k].t <= t1) { i = k; break; } if (j < 0 || i <= j) return null; const dt = (s[i].t - s[j].t) / 1000; if (dt < (t1 - t0) / 1000 * 0.8) return null; return dist(s[j], s[i]) / dt * 1.94384; };
     let p10 = null, p30 = null;
-    segs.forEach(s => { for (let i = 1; i < s.length; i++) { for (const [win, key] of [[10, 'p10'], [30, 'p30']]) { let j = i; while (j > 0 && (s[i].t - s[j].t) < win * 1000) j--; const dt = (s[i].t - s[j].t) / 1000; if (dt < win * 0.8) continue; const kn = dist(s[j], s[i]) / dt * 1.94384; if (kn > MAX_KN) continue; const rec = { kn, t: s[i].t, hdg: bearing(s[j], s[i]), lat: s[i].lat, lon: s[i].lon }; if (key === 'p10' && (!p10 || kn > p10.kn)) p10 = rec; if (key === 'p30' && (!p30 || kn > p30.kn)) p30 = rec; } } });
+    csegs.forEach(s => { for (let i = 3; i < s.length; i++) { for (const [win, key] of [[10, 'p10'], [30, 'p30']]) {
+      let j = i; while (j > 0 && (s[i].t - s[j].t) < win * 1000) j--; const dt = (s[i].t - s[j].t) / 1000; if (dt < win * 0.8 || i - j < 3) continue;
+      const steps = []; for (let k = j + 1; k <= i; k++) steps.push(dist(s[k - 1], s[k]) / ((s[k].t - s[k - 1].t) / 1000) * 1.94384);
+      let kn = Math.min(median(steps), dist(s[j], s[i]) / dt * 1.94384);
+      const dop = s.slice(j, i + 1).map(x => x.spd).filter(x => x != null && x >= 0);
+      if (dop.length >= 3) kn = median(dop) * 1.94384;
+      else if (win === 10) { const c = dispKn(s, s[i].t - 20000, s[i].t + 10000); if (c == null) continue; kn = Math.min(kn, c + 0.7); }
+      if (kn > PEAK_MAX) continue;
+      const rec = { kn, t: s[i].t, hdg: bearing(s[j], s[i]), lat: s[i].lat, lon: s[i].lon };
+      if (key === 'p10' && (!p10 || kn > p10.kn)) p10 = rec; if (key === 'p30' && (!p30 || kn > p30.kn)) p30 = rec; } } });
+    out.gpsQuality = { fixes: pts.length, spikes: good.length - clean.length, weak: pts.length - good.length };
     out.peak10 = p10; out.peak30 = p30;
     // legs: group samples by stable heading; a leg breaks on a sustained heading change > 50 deg or a slow spell
     const legs = []; let cur = null;
@@ -508,13 +581,13 @@ const SA = (() => {
 
   // The sail overview: the summary paragraph, the wind, and the count of tacks and gybes. wind: {from, kn, gust} or null. Returns plain text with blank lines between paragraphs.
   function story(a, opts) {
-    opts = opts || {}; const tz = opts.tz; const w = opts.wind;
+    opts = opts || {}; const tz = opts.tz; const w = opts.wind; const top = opts.top != null ? opts.top : (a && a.peak10 ? a.peak10.kn : null);
     if (!a || a.n < 2) return 'Too short a track to describe.';
     const P = []; const hasWind = w && w.from != null;
     const day = new Date(a.start).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', timeZone: tz });
     P.push(`${day}, ${fmtT(a.start, tz)} to ${fmtT(a.end, tz)}, ${Math.round(a.minutes)} minutes. ${a.nm.toFixed(1)} nautical miles (${(a.nm * 1.1508).toFixed(1)} statute), averaging ${a.avgMovingKn.toFixed(1)} knots while moving.` +
-      (a.peak10 ? ` Top speed ${a.peak10.kn.toFixed(1)} knots` + (a.peak30 ? `, with ${a.peak30.kn.toFixed(1)} held over half a minute.` : '.') : '') +
-      (a.peak10 && a.peak10.kn >= 5.6 ? ' That is at or near hull speed for a Catalina 22.' : ''));
+      (top != null ? ` Top speed ${top.toFixed(1)} knots` + (opts.topSrc === 'speedpuck' ? ', confirmed on the Speedpuck.' : opts.topSrc === 'gps' ? ', confirmed.' : a.peak30 ? `, with ${a.peak30.kn.toFixed(1)} held over half a minute.` : '.') : '') +
+      (top != null && top >= 5.6 ? ' That is at or near hull speed for a Catalina 22.' : ''));
     if (hasWind) P.push(`Wind from the ${compassWord(w.from)} at about ${Math.round(w.kn)} knots` + (w.gust ? `, gusting ${Math.round(w.gust)}` : '') + '.');
     // totals
     const T = [];
@@ -541,7 +614,7 @@ const SA = (() => {
 <script>
 (function () {
   'use strict';
-  const APP_VERSION = '6.0';
+  const APP_VERSION = '6.1';
   const LAKE = { lat: 40.975, lon: -96.870, zoom: 14 };
   const DRAFT_FT = 2.5;
   const CONTOUR_URL = "https://services5.arcgis.com/IOshH1zLrIieqrNk/arcgis/rest/services/LakeContours/FeatureServer/0/query"
@@ -691,12 +764,12 @@ const SA = (() => {
     $('#hud-cog').textContent = cog != null ? Math.round(cog) : '–';
     heading = cog; lastCog = cog; lastKn = kn;
     if (headingEl) { if (heading != null && !isNaN(heading) && kn > 0.5) { headingEl.classList.remove('hidden'); headingEl.style.transform = `rotate(${heading}deg)`; } else headingEl.classList.add('hidden'); }
-    $('#hud-sub').innerHTML = (recording ? '<span class="rec">● REC</span> ' : '') + `±${Math.round(accuracy)} m · ${fmtTime(new Date(p.timestamp))}`;
-    if (followMe) map.panTo(ll, { animate: true, duration: .5 });
+    $('#hud-sub').innerHTML = (recording ? '<span class="rec">● REC</span> ' : '') + `±${Math.round(accuracy)} m${accuracy > 20 ? ' <span class="rec">weak</span>' : ''} · ${fmtTime(new Date(p.timestamp))}`;
+    if (followMe && !saverUp()) map.panTo(ll, { animate: true, duration: .5 });
     lastPos = { lat, lon, t: p.timestamp, acc: accuracy, kn };
     if (recording && accuracy < 50) {
       const prev = track[track.length - 1];
-      if (!prev || map.distance([prev.lat, prev.lon], ll) > 3) { track.push({ lat, lon, t: p.timestamp }); trackLine.addLatLng(ll); if (track.length % 10 === 0) saveCurrentTrack(); }
+      if (!prev || map.distance([prev.lat, prev.lon], ll) > 3) { const fx = { lat, lon, t: p.timestamp, acc: Math.round(accuracy) }; if (speed != null && speed >= 0) fx.spd = Math.round(speed * 100) / 100; track.push(fx); trackLine.addLatLng(ll); if (track.length % 10 === 0) saveCurrentTrack(); }
     }
   }
   map.on('dragstart', () => { followMe = false; $('#btn-locate').classList.remove('on'); });
@@ -718,6 +791,13 @@ const SA = (() => {
     const el = $('#wakestatus'); if (el) el.textContent = t;
     const h = $('#hud-wake'); if (h) { h.textContent = wakeStatus === 'on' ? '☀ on' : wakeStatus === 'unsupported' ? '☀ n/a' : '☀ off'; h.title = t; }
   }
+  // A web page gets no GPS while the screen is off or another app is in front. Say so when the crew comes back, so a gap has a reason.
+  let hiddenAt = null;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { if (recording) hiddenAt = Date.now(); return; }
+    if (recording && hiddenAt) { const m = (Date.now() - hiddenAt) / 60000; if (m >= 0.5) toast(`GPS paused for ${m < 1.5 ? 'about a minute' : Math.round(m) + ' minutes'} while the app was not on screen. Keep the app open and the screen on while recording.`, 9000); }
+    hiddenAt = null;
+  });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { applyWake(); if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; startGps(); } } });
 
   function saveCurrentTrack() { store.set('track_current', { started: track[0] ? track[0].t : Date.now(), pts: track, events: trackEvents }); }
@@ -726,7 +806,27 @@ const SA = (() => {
 
   /* ---------- Sails (tracks) ---------- */
   let sails = (store.get('tracks', []) || []).map(t => ({ ...t, id: String(t.id), name: t.name || '', story: t.story || '', auto: t.auto || '', qa: t.qa || [], photos: t.photos || [], wind: t.wind || null, events: t.events || [], pending: !!t.pending, updated: t.updated || t.ended || Date.now(), deleted: !!t.deleted, by: t.by || '' }));
-  function saveSails() { store.set('tracks', sails); }
+  // Sails live in IndexedDB from v6.1. Photos made the old localStorage copy pass the phone's limit (about 5 MB), so saves quietly
+  // failed and an old copy without the newer photos came back on the next launch. localStorage 'tracks' is now only a fallback.
+  const sailDB = (() => {
+    let dbp = null;
+    const open = () => dbp || (dbp = new Promise((res, rej) => { try { const r = indexedDB.open('branched-oak', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }));
+    const tx = (mode, fn) => open().then(db => new Promise((res, rej) => { const t = db.transaction('kv', mode); const st = t.objectStore('kv'); const out = fn(st); t.oncomplete = () => res(out && out.result); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); }));
+    return { get: k => tx('readonly', st => st.get(k)), set: (k, v) => tx('readwrite', st => { st.put(v, k); }) };
+  })();
+  let sailsLoaded = false, idbOk = true, saveQueued = false;
+  function saveSails() {
+    if (!sailsLoaded) { saveQueued = true; return; }
+    const copy = sails.map(t => ({ ...t }));
+    if (idbOk) sailDB.set('sails', copy).then(() => { try { localStorage.removeItem('tracks'); } catch (e) {} setData('sail storage', 'phone database, ' + sails.length + ' sails'); })
+      .catch(() => { idbOk = false; fallbackSave(); });
+    else fallbackSave();
+  }
+  // without IndexedDB, keep the sails in localStorage without photo pictures (the server keeps those and the next launch fetches them)
+  function fallbackSave() { store.set('tracks', sails.map(t => ({ ...t, photos: (t.photos || []).map(p => ({ id: p.id, caption: p.caption || '' })) }))); setData('sail storage', 'browser storage (photos from the server)'); }
+  const sailsReady = sailDB.get('sails').then(v => {
+    if (Array.isArray(v) && v.length) sails = v.map(t => ({ ...t, photos: t.photos || [], events: t.events || [], qa: t.qa || [] }));
+  }).catch(() => { idbOk = false; }).then(() => { sailsLoaded = true; saveSails(); saveQueued = false; try { renderMarks(); } catch (e) {} });
   const TZ = 'America/Chicago';
   const anaCache = {};
   function analysisOf(t) { const k = t.id + ':' + (t.pts ? t.pts.length : 0); if (!anaCache[k]) anaCache[k] = SA.analyze(t.pts || []); return anaCache[k]; }
@@ -739,7 +839,25 @@ const SA = (() => {
       h.time.forEach((t, i) => { const dd = Math.abs(new Date(t + ':00-05:00').getTime() - ms); if (dd < bd) { bd = dd; best = i; } });
       return { from: h.wind_direction_10m[best], kn: h.wind_speed_10m[best], gust: h.wind_gusts_10m[best] }; } catch (e) { return null; }
   }
-  function liveStory(t) { return SA.story(analysisOf(t), { tz: TZ, wind: t.wind, qa: t.qa || [], events: t.events || [] }); }
+  // A crew confirmed top speed lives in the sail's qa list as { id: 'topspeed', kn, src: 'gps' | 'speedpuck', at, by } so it syncs with the sail.
+  const topConf = t => (t.qa || []).find(q => q && q.id === 'topspeed') || null;
+  function topSpeed(t) { const c = topConf(t); if (c && isFinite(c.kn)) return { kn: c.kn, src: c.src }; const a = analysisOf(t); return a.peak10 ? { kn: a.peak10.kn, src: null } : null; }
+  function liveStory(t) { const tp = topSpeed(t); return SA.story(analysisOf(t), { tz: TZ, wind: t.wind, qa: t.qa || [], events: t.events || [], top: tp ? tp.kn : null, topSrc: tp ? tp.src : null }); }
+  function openTopSpeed(t) {
+    const a = analysisOf(t), c = topConf(t), gps = a.peak10 ? a.peak10.kn : null; const box = $('#rsheet-box'); $('#rsheet').classList.remove('hidden');
+    box.innerHTML = `<h2>Top speed</h2><div class="small muted" style="margin-bottom:10px">${t.name ? esc(t.name) + ' · ' : ''}${new Date(t.started).toLocaleDateString()}</div>
+      <div>GPS top speed: <b>${gps != null ? gps.toFixed(1) + ' kn' : 'none'}</b>${gps != null && a.peak10 ? ' at ' + fmtTime(new Date(a.peak10.t)) : ''}</div>
+      ${c ? `<div style="margin-top:4px">Confirmed: <b>${c.kn.toFixed(1)} kn</b> (${c.src === 'speedpuck' ? 'Speedpuck reading' : 'GPS accepted'}${c.by ? ', ' + esc(c.by) : ''})</div>` : ''}
+      <div class="toolbar" style="margin-top:12px">${gps != null ? '<button class="btn primary" id="ts-ok">Speedpuck agrees</button>' : ''}</div>
+      <div style="margin-top:10px">Or enter the Speedpuck's top speed:</div>
+      <div class="toolbar" style="margin-top:6px"><input type="number" id="ts-kn" inputmode="decimal" step="0.1" min="0" max="12" placeholder="knots" style="max-width:110px"><button class="btn" id="ts-save">Save</button></div>
+      <div class="toolbar" style="margin-top:12px">${c ? '<button class="btn danger" id="ts-clear">Clear confirmation</button>' : ''}<button class="btn" id="ts-cancel">Cancel</button></div>`;
+    const set = (kn, src) => { t.qa = (t.qa || []).filter(q => !(q && q.id === 'topspeed')); if (kn != null) t.qa.push({ id: 'topspeed', kn: Math.round(kn * 10) / 10, src, at: Date.now(), by: crewName() }); touch(t); saveSails(); syncSoon(); closeRouteSheet(); renderMarks(); };
+    const ok = box.querySelector('#ts-ok'); if (ok) ok.addEventListener('click', () => set(gps, 'gps'));
+    box.querySelector('#ts-save').addEventListener('click', () => { const v = parseFloat(box.querySelector('#ts-kn').value); if (!isFinite(v) || v <= 0 || v > 12) { toast('Enter the speed in knots, for example 5.9'); return; } set(v, 'speedpuck'); });
+    const cl = box.querySelector('#ts-clear'); if (cl) cl.addEventListener('click', () => set(null));
+    box.querySelector('#ts-cancel').addEventListener('click', closeRouteSheet);
+  }
   function writeAuto(t) { t.auto = liveStory(t); }
   function finishSail(pts, recovered, events) {
     const s = touch({ id: newId(), name: '', story: '', auto: '', qa: [], photos: [], wind: windNow(), events: events || [], pending: false, started: pts[0].t, ended: pts[pts.length - 1].t, pts, deleted: false, by: crewName(), recovered: !!recovered });
@@ -750,7 +868,7 @@ const SA = (() => {
     const box = $('#rsheet-box'); $('#rsheet').classList.remove('hidden');
     const n = (t.photos || []).length;
     box.innerHTML = `<h2>${t.name ? esc(t.name) : 'Pictures from this sail'}</h2><div class="small muted">Up to 6. They are shrunk for the phone and shared with the crew. Tap a picture in the log to remove it.</div>
-      <div class="photos" id="ph-list">${(t.photos || []).map(p => `<img src="${p.data}" alt="">`).join('')}</div>
+      <div class="photos" id="ph-list">${(t.photos || []).filter(p => p.data).map(p => `<img src="${p.data}" alt="">`).join('')}</div>
       <div class="toolbar" style="margin-top:12px"><label class="btn primary">${n ? 'Add more' : 'Choose photos'}<input type="file" id="ph-file" accept="image/*" multiple></label><button class="btn" id="ph-done">Done</button></div>`;
     box.querySelector('#ph-file').addEventListener('change', async e => { await addPhotos(t, e.target.files); openPhotos(t); });
     box.querySelector('#ph-done').addEventListener('click', () => { closeRouteSheet(); renderTracks(); });
@@ -769,14 +887,58 @@ const SA = (() => {
   $('#btn-track').addEventListener('click', async () => {
     if (!recording) {
       recording = true; track = []; trackEvents = []; if (liveLayer) map.removeLayer(liveLayer); liveLayer = L.layerGroup().addTo(map); trackLine = L.polyline([], { color: '#ffcc4d', weight: 3, opacity: .9 }).addTo(liveLayer); $('#btn-wp').classList.remove('hidden'); placeWpBtn(); showSail(null);
-      $('#btn-track').classList.add('on'); startGps(); await requestWake(); toast(wakeStatus === 'on' ? 'Recording sail. Screen will stay on.' : 'Recording sail. Keep the screen on manually.');
+      $('#btn-track').classList.add('on'); startGps(); saverStart(); await requestWake(); toast(wakeStatus === 'on' ? 'Recording sail. Screen will stay on.' : 'Recording sail. Keep the screen on manually.');
     } else {
-      recording = false; $('#btn-track').classList.remove('on');
+      recording = false; $('#btn-track').classList.remove('on'); saverStop();
       applyWake();
       $('#btn-wp').classList.add('hidden'); if (track.length > 1) { finishSail(track, false, trackEvents); toast('Sail saved (' + track.length + ' points)'); let fresh = []; try { fresh = renderAwards(); } catch (e) {} if (fresh.length) setTimeout(() => { toast('New Sail earned: ' + fresh.map(r => r.aw.name).join(', '), 4000); openAward(fresh[0].aw.id); }, 800); }
       else toast('Sail too short to save');
       localStorage.removeItem('track_current'); track = []; trackEvents = []; $('#hud-sub').textContent = lastPos ? `±${Math.round(lastPos.acc)} m` : 'GPS on';
     }
+  });
+  /* ---------- Battery saver screen ---------- */
+  // Shown while recording. Map hides it for 30 s (longer while the map is being touched). While it is up: no wind animation, no map panning.
+  let peekUntil = 0, saverTick = null, recStart = 0;
+  const saverUp = () => !$('#saver').classList.contains('hidden');
+  function trackNm() { let d = 0; for (let i = 1; i < track.length; i++) { const a = track[i - 1], b = track[i], dt = (b.t - a.t) / 1000; const m = SA.dist(a, b); if (dt > 0 && !(dt > 30 && m > 30) && m / dt * 1.94384 <= 9) d += m; } return d / 1852; }
+  function saverShow(on) {
+    $('#saver').classList.toggle('hidden', !on); document.body.classList.toggle('saver-on', on);
+    if (on) stopWind(); else { startWind(); if (followMe && lastPos) map.panTo([lastPos.lat, lastPos.lon]); }
+  }
+  function saverRender() {
+    if (!recording) return;
+    if (peekUntil && Date.now() < peekUntil) { if (saverUp()) saverShow(false); }
+    else { peekUntil = 0; if (!saverUp()) saverShow(true); }
+    if (!saverUp()) return;
+    const el = Math.max(0, Date.now() - recStart) / 1000, h = Math.floor(el / 3600), m = Math.floor(el % 3600 / 60);
+    $('#sv-time').textContent = (h ? h + ':' + String(m).padStart(2, '0') : m + ' min') + ' recording';
+    $('#sv-gps').textContent = lastPos ? '±' + Math.round(lastPos.acc) + ' m' + (lastPos.acc > 20 ? ' weak' : '') : 'no GPS';
+    $('#sv-gps').style.color = lastPos && lastPos.acc > 20 ? '#ff5a5a' : '';
+    $('#sv-sog-v').textContent = lastKn != null ? lastKn.toFixed(1) : '–';
+    $('#sv-cog').innerHTML = lastCog != null ? Math.round(lastCog) + '<small>°</small>' : '–';
+    $('#sv-dist').innerHTML = trackNm().toFixed(1) + '<small>nm</small>';
+    const w = liveWind(); $('#sv-wind').innerHTML = w.kn != null ? Math.round(w.kn) + '<small>kn ' + compass(w.from) + '</small>' : '–';
+    let pos = '–'; if (w.kn != null && lastCog != null && lastKn > 0.8) { const tp = SA.tackAndPos(lastCog, w.from); pos = tp.pos === 'too close to the wind' ? 'Into the wind' : tp.pos.charAt(0).toUpperCase() + tp.pos.slice(1); } $('#sv-pos').textContent = pos;
+    $('#saver').classList.toggle('noheel', !heelOn); $('#sv-heelbox').classList.toggle('hidden', !heelOn); $('#sv-heel-start').classList.toggle('hidden', heelOn);
+    if (heelOn && heelCur != null) {
+      const d = Math.abs(heelCur), col = Math.round(d) >= 21 ? '#ff5a5a' : Math.round(d) >= 15 ? '#e2b84a' : '#5fd38d';
+      $('#sv-heel-v').textContent = Math.round(d) + '°'; $('#sv-heel-z').textContent = heelZoneOf(d); $('#sv-heel').style.color = col;
+      $('#sv-heel-s').textContent = d < 1.5 ? 'level' : (heelCur > 0 ? 'to starboard' : 'to port');
+      $('#sv-gauge-i').style.left = Math.min(100, d / 30 * 100) + '%';
+    }
+  }
+  function saverStart() { recStart = Date.now(); peekUntil = 0; clearInterval(saverTick); saverTick = setInterval(saverRender, 250); saverRender(); }
+  function saverStop() { clearInterval(saverTick); saverTick = null; peekUntil = 0; saverShow(false); }
+  $('#sv-map').addEventListener('click', () => { peekUntil = Date.now() + 30000; document.querySelector('nav button[data-view=map]').click(); saverRender(); });
+  ['movestart', 'zoomstart', 'click'].forEach(ev => map.on(ev, () => { if (peekUntil) peekUntil = Math.max(peekUntil, Date.now() + 30000); }));
+  $('#sv-wp').addEventListener('click', () => $('#btn-wp').click());
+  $('#sv-heel-start').addEventListener('click', () => heelStart());
+  $('#sv-heelbox').addEventListener('click', () => { if (heelOn) openHeelSheet(); }); // Zero and Swap sides, same sheet as the strip
+  let stopArm = null;
+  $('#sv-stop').addEventListener('click', () => {
+    const b = $('#sv-stop');
+    if (!stopArm) { b.classList.add('arm'); b.textContent = 'Tap again'; stopArm = setTimeout(() => { stopArm = null; b.classList.remove('arm'); b.textContent = 'Stop'; }, 3000); return; }
+    clearTimeout(stopArm); stopArm = null; b.classList.remove('arm'); b.textContent = 'Stop'; $('#btn-track').click();
   });
   function recoverTrack() { const cur = store.get('track_current', null); if (cur && cur.pts && cur.pts.length > 1) { finishSail(cur.pts, true, cur.events || []); localStorage.removeItem('track_current'); } }
 
@@ -785,6 +947,26 @@ const SA = (() => {
     const nm = dist / 1852, hrs = (t.ended - t.started) / 3600e3;
     return { nm, hrs, avg: hrs > 0 ? nm / hrs : 0 };
   }
+  // GPX import: a backup track (for example an Apple Watch workout route exported as GPX). If it overlaps a logged sail, it can
+  // replace that sail's track and keep its name, photos and notes; otherwise it becomes a new sail.
+  function parseGpx(text) {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    const pts = Array.from(doc.getElementsByTagName('trkpt')).map(n => { const t = Date.parse((n.getElementsByTagName('time')[0] || {}).textContent || ''); const sp = n.getElementsByTagName('speed')[0] || Array.from(n.getElementsByTagName('*')).find(x => /:speed$/i.test(x.tagName)); const o = { lat: +n.getAttribute('lat'), lon: +n.getAttribute('lon'), t }; if (sp && isFinite(+sp.textContent)) o.spd = Math.round(+sp.textContent * 100) / 100; return o; })
+      .filter(p => isFinite(p.lat) && isFinite(p.lon) && isFinite(p.t)).sort((a, b) => a.t - b.t);
+    return pts;
+  }
+  $('#gpx-file').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    let pts = []; try { pts = parseGpx(await f.text()); } catch (er) {}
+    if (pts.length < 2) { toast('No track points with times in that file'); return; }
+    const a = pts[0].t, z = pts[pts.length - 1].t;
+    const hit = sails.find(t => !t.deleted && t.started < z && t.ended > a);
+    if (hit) {
+      if (!confirm(`This track overlaps "${hit.name || new Date(hit.started).toLocaleDateString()}". Use it as that sail's track? The name, photos and notes stay.`)) return;
+      hit.pts = pts; hit.started = a; hit.ended = z; writeAuto(hit); touch(hit); saveSails(); syncSoon(); renderMarks(); toast('Track replaced'); return;
+    }
+    const s = finishSail(pts, false, []); s.wind = null; saveSails(); renderMarks(); toast('Imported as a new sail');
+  });
   function gpx(t) {
     const pts = t.pts.map(p => `<trkpt lat="${p.lat}" lon="${p.lon}"><time>${new Date(p.t).toISOString()}</time></trkpt>`).join('\n');
     return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Branched Oak Sailing" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>${esc(t.name || 'Buen Camino ' + new Date(t.started).toLocaleDateString())}</name><trkseg>\n${pts}\n</trkseg></trk></gpx>`;
@@ -808,8 +990,10 @@ const SA = (() => {
     el.innerHTML = live.map(t => { const a = analysisOf(t); const full = t.story ? t.story : liveStory(t);
       return `<div class="markitem"><div class="name">${t.name ? esc(t.name) : new Date(t.started).toLocaleDateString()}</div>
       ${full.trim() ? `<div class="story clamp" data-story="s${t.id}">${esc(full)}</div><button class="linkbtn" data-more="s${t.id}">Read more</button>` : ''}
-      ${(t.photos || []).length ? `<div class="photos">${t.photos.map(p => `<img src="${p.data}" data-ph="${t.id}:${p.id}" alt="">`).join('')}</div>` : ''}
+      ${(() => { const tp = topSpeed(t); if (!tp) return ''; return `<div class="small" style="margin-top:6px">Top speed ${tp.kn.toFixed(1)} kn${tp.src ? ' <span style="color:var(--accent)">✓ confirmed</span>' : ' (GPS)'} <button class="linkbtn" data-top="${t.id}">${tp.src ? 'Change' : 'Confirm'}</button></div>`; })()}
+      ${(t.photos || []).some(p => p.data) ? `<div class="photos">${t.photos.filter(p => p.data).map(p => `<img src="${p.data}" data-ph="${t.id}:${p.id}" alt="">`).join('')}</div>` : ''}
       <div class="toolbar"><button class="btn sm" data-iv="${t.id}">Add photos</button><button class="btn sm" data-show="${t.id}">Show on map</button><button class="btn sm" data-sedit="${t.id}">Edit</button><button class="btn sm" data-gpx="${t.id}">Share GPX</button><button class="btn sm danger" data-del="${t.id}">Delete</button></div></div>`; }).join('');
+    el.querySelectorAll('[data-top]').forEach(b => b.addEventListener('click', () => openTopSpeed(sails.find(x => x.id == b.dataset.top))));
     el.querySelectorAll('[data-iv]').forEach(b => b.addEventListener('click', () => openPhotos(sails.find(x => x.id == b.dataset.iv))));
     el.querySelectorAll('[data-ph]').forEach(im => im.addEventListener('click', () => { const [sid, pid] = im.dataset.ph.split(':'); viewPhoto(sails.find(x => x.id == sid), pid); }));
     el.querySelectorAll('[data-show]').forEach(b => b.addEventListener('click', () => { const t = sails.find(x => x.id == b.dataset.show); document.querySelector('nav button[data-view=map]').click(); setTimeout(() => showSail(t), 80); }));
@@ -906,7 +1090,7 @@ const SA = (() => {
     if (!window.DeviceMotionEvent) { toast('This device does not report tilt'); return false; }
     window.addEventListener('devicemotion', onMotion); heelOn = true; heelMax = 0;
     heelTimer = setInterval(heelRender, 150);
-    toast(heelZero == null ? 'Set the phone down level, then tap the meter and Zero' : 'Heel-O-Meter running', 4000);
+    toast(heelZero == null ? 'Set the phone down level, then tap the heel reading and Zero' : 'Heel-O-Meter running', 4000);
     return true;
   }
   function heelZeroNow() { if (!heelG) { toast('Start the meter first'); return; } heelZero = heelAngle(heelG); heelMax = 0; store.set('heelZero', heelZero); toast('Zeroed. This is level.'); heelRender(); }
@@ -955,7 +1139,7 @@ const SA = (() => {
   function bestSail(c, val) { let best = null; c.sails.forEach(s => { const v = val(s); if (v != null && (!best || v > best.value)) best = { value: v, sail: s }; }); return best; }
   function awardContext() {
     const live = sails.filter(t => !t.deleted && t.pts && t.pts.length > 1).sort((a, b) => a.started - b.started);
-    const ss = live.map(t => { const a = analysisOf(t); const p = sailParts(t.started), e = sailParts(t.ended); return { t, a, nm: a.nm || 0, peak: a.peak10 ? a.peak10.kn : null, hours: (t.ended - t.started) / 3600e3, year: p.y, month: p.m, day: p.d, hour: p.h, endHour: e.h, windKn: t.wind ? t.wind.kn : null, places: new Set((a.visited || []).map(v => v.id)), label: t.name || (MONTHS[p.m - 1] + ' ' + p.d), dateLabel: MONTHS[p.m - 1] + ' ' + p.d + ', ' + p.y }; });
+    const ss = live.map(t => { const a = analysisOf(t); const p = sailParts(t.started), e = sailParts(t.ended); return { t, a, nm: a.nm || 0, peak: (topSpeed(t) || {}).kn ?? null, peakConfirmed: !!(topSpeed(t) || {}).src, hours: (t.ended - t.started) / 3600e3, year: p.y, month: p.m, day: p.d, hour: p.h, endHour: e.h, windKn: t.wind ? t.wind.kn : null, places: new Set((a.visited || []).map(v => v.id)), label: t.name || (MONTHS[p.m - 1] + ' ' + p.d), dateLabel: MONTHS[p.m - 1] + ' ' + p.d + ', ' + p.y }; });
     const byMonth = {}, bySeason = {}, byDay = {};
     ss.forEach(s => { const mk = s.year + '-' + s.month, dk = mk + '-' + s.day, yk = String(s.year);
       (byMonth[mk] = byMonth[mk] || { n: 0, nm: 0, sails: [], label: MONTHS[s.month - 1] + ' ' + s.year }); byMonth[mk].n++; byMonth[mk].nm += s.nm; byMonth[mk].sails.push(s);
@@ -993,8 +1177,8 @@ const SA = (() => {
     const nm = ss.reduce((a, s) => a + s.nm, 0), hrs = ss.reduce((a, s) => a + s.hours, 0); const best = ss.filter(s => s.peak != null).sort((a, b) => b.peak - a.peak)[0]; const longest = ss.slice().sort((a, b) => b.nm - a.nm)[0];
     const moving = ss.reduce((a, s) => a + (s.a.avgMovingKn || 0) * s.nm, 0) / (nm || 1); const months = new Set(ss.map(s => s.month)).size; const first = ss[0], last = ss[ss.length - 1];
     const tile = (v, l) => `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`;
-    el.innerHTML = `<div class="stats">${tile(ss.length, ss.length === 1 ? 'sail' : 'sails')}${tile(nm.toFixed(1), 'nautical miles')}${tile(hrs >= 10 ? Math.round(hrs) + ' h' : Math.floor(hrs) + ' h ' + Math.round((hrs % 1) * 60) + ' m', 'on the water')}${tile(best ? best.peak.toFixed(1) + ' kn' : '–', 'top speed')}${tile(moving.toFixed(1) + ' kn', 'average while moving')}${tile(longest ? longest.nm.toFixed(1) + ' nm' : '–', 'longest sail')}</div>
-      <div class="small muted" style="margin-top:8px">${yr} season, ${months} month${months === 1 ? '' : 's'} sailed, from ${first.dateLabel.replace(', ' + yr, '')} to ${last.dateLabel.replace(', ' + yr, '')}.${best ? ' Top speed on ' + (best.t.name ? '"' + esc(best.t.name) + '"' : best.dateLabel) + '.' : ''}</div>`;
+    el.innerHTML = `<div class="stats">${tile(ss.length, ss.length === 1 ? 'sail' : 'sails')}${tile(nm.toFixed(1), 'nautical miles')}${tile(hrs >= 10 ? Math.round(hrs) + ' h' : Math.floor(hrs) + ' h ' + Math.round((hrs % 1) * 60) + ' m', 'on the water')}${tile(best ? best.peak.toFixed(1) + ' kn' : '–', best && best.peakConfirmed ? 'top speed ✓' : 'top speed')}${tile(moving.toFixed(1) + ' kn', 'average while moving')}${tile(longest ? longest.nm.toFixed(1) + ' nm' : '–', 'longest sail')}</div>
+      <div class="small muted" style="margin-top:8px">${yr} season, ${months} month${months === 1 ? '' : 's'} sailed, from ${first.dateLabel.replace(', ' + yr, '')} to ${last.dateLabel.replace(', ' + yr, '')}.${best ? ' Top speed on ' + (best.t.name ? '"' + esc(best.t.name) + '"' : best.dateLabel) + (best.peakConfirmed ? ', confirmed.' : ', from GPS.') : ''}</div>`;
   }
   let awardsSeen = store.get('awardsSeen', null);
   function renderAwards() {
@@ -1424,13 +1608,17 @@ const SA = (() => {
   }
   const iso = ms => new Date(ms).toISOString();
   async function syncAll() {
-    if (syncState.busy || !crew() || !navigator.onLine) return; syncState.busy = true; renderSyncStatus();
+    if (!sailsLoaded || syncState.busy || !crew() || !navigator.onLine) return; syncState.busy = true; renderSyncStatus();
     try {
       // push dirty marks and sails
       const dm = marks.filter(m => m.dirty).map(m => ({ id: m.id, name: m.name, note: m.note || '', story: m.story || '', kind: m.kind || 'mark', lat: m.lat, lon: m.lon, created_at: iso(m.at || m.updated), updated_at: iso(m.updated), deleted: !!m.deleted, device: m.by || '' }));
       if (dm.length) { await sb('marks', { method: 'POST', body: dm, prefer: 'resolution=merge-duplicates,return=minimal' }); marks.forEach(m => m.dirty = false); }
-      const ds = sails.filter(t => t.dirty).map(t => ({ id: t.id, name: t.name || '', story: t.story || '', auto: t.auto || '', qa: t.qa || [], photos: t.photos || [], wind: t.wind || null, events: t.events || [], pending: !!t.pending, started: iso(t.started), ended: iso(t.ended), pts: t.pts, updated_at: iso(t.updated), deleted: !!t.deleted, device: t.by || '' }));
-      if (ds.length) { await sb('sails', { method: 'POST', body: ds, prefer: 'resolution=merge-duplicates,return=minimal' }); sails.forEach(t => t.dirty = false); }
+      // a sail whose photo pictures are not on this phone (storage fallback) is pushed without its photos, so the server copy is never thinned
+      const row = t => ({ id: t.id, name: t.name || '', story: t.story || '', auto: t.auto || '', qa: t.qa || [], photos: t.photos || [], wind: t.wind || null, events: t.events || [], pending: !!t.pending, started: iso(t.started), ended: iso(t.ended), pts: t.pts, updated_at: iso(t.updated), deleted: !!t.deleted, device: t.by || '' });
+      const dirtyS = sails.filter(t => t.dirty), full = dirtyS.filter(t => (t.photos || []).every(p => p.data)), thin = dirtyS.filter(t => !(t.photos || []).every(p => p.data));
+      if (full.length) await sb('sails', { method: 'POST', body: full.map(row), prefer: 'resolution=merge-duplicates,return=minimal' });
+      if (thin.length) await sb('sails', { method: 'POST', body: thin.map(t => { const r = row(t); delete r.photos; return r; }), prefer: 'resolution=merge-duplicates,return=minimal' });
+      if (dirtyS.length) dirtyS.forEach(t => t.dirty = false);
       const dr = routes.filter(r => r.dirty).map(r => ({ id: r.id, name: r.name || '', story: r.story || '', waypoints: r.wps, updated_at: iso(r.updated), deleted: !!r.deleted, device: r.by || '' }));
       if (dr.length) { await sb('routes', { method: 'POST', body: dr, prefer: 'resolution=merge-duplicates,return=minimal' }); routes.forEach(r => r.dirty = false); }
       const dli = lists.filter(l => l.dirty).map(l => ({ id: l.id, name: l.name, items: l.items, updated_at: iso(l.updated), deleted: !!l.deleted, device: crewName() }));
@@ -1447,7 +1635,7 @@ const SA = (() => {
       const rs = await sb('sails?select=*&updated_at=gt.' + encodeURIComponent(since));
       rs.forEach(r => { const u = Date.parse(r.updated_at); const loc = sails.find(t => t.id === r.id);
         if (!loc) { sails.push({ id: r.id, name: r.name || '', story: r.story || '', auto: r.auto || '', qa: r.qa || [], photos: r.photos || [], wind: r.wind || null, events: r.events || [], pending: !!r.pending, started: Date.parse(r.started), ended: Date.parse(r.ended), pts: r.pts, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
-        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { name: r.name || '', story: r.story || '', auto: r.auto || '', qa: r.qa || [], photos: r.photos || [], wind: r.wind || loc.wind, events: r.events || loc.events || [], pending: !!r.pending, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
+        else if (u > loc.updated && !loc.dirty) { Object.assign(loc, { name: r.name || '', story: r.story || '', auto: r.auto || '', qa: r.qa || [], photos: r.photos || [], pts: r.pts || loc.pts, started: Date.parse(r.started) || loc.started, ended: Date.parse(r.ended) || loc.ended, wind: r.wind || loc.wind, events: r.events || loc.events || [], pending: !!r.pending, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; } });
       const rr = await sb('routes?select=*&updated_at=gt.' + encodeURIComponent(since));
       rr.forEach(r => { const u = Date.parse(r.updated_at); const loc = routes.find(x => x.id === r.id);
         if (!loc) { routes.push({ id: r.id, name: r.name || '', story: r.story || '', wps: r.waypoints, updated: u, deleted: !!r.deleted, by: r.device || '' }); changed = true; }
@@ -1491,13 +1679,30 @@ const SA = (() => {
   });
   $('#crew-signout').addEventListener('click', () => { localStorage.removeItem('crew'); syncState.error = 'nokey'; renderSyncStatus(); $('#crew-name').value = ''; $('#crew-key').value = ''; toast('Signed out on this phone'); });
   (function initCrew() { const c = crew(); if (c) { $('#crew-name').value = c.name; $('#crew-key').value = c.key; } renderSyncStatus(); })();
-  setInterval(() => { if (document.visibilityState === 'visible') syncAll(); }, 30000);
+  // every 30 s normally; every 5 minutes while recording, to save battery (a finished sail still syncs right away)
+  let lastAutoSync = 0;
+  setInterval(() => { if (document.visibilityState !== 'visible') return; if (recording && Date.now() - lastAutoSync < 5 * 60e3) return; lastAutoSync = Date.now(); syncAll(); }, 30000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncAll(); });
   window.addEventListener('online', syncAll);
   $('#keepawake-toggle').checked = keepAwake;
   $('#keepawake-toggle').addEventListener('change', e => { keepAwake = e.target.checked; store.set('keepAwake', keepAwake); applyWake(); });
   applyWake(); renderWakeStatus();
-  recoverTrack(); syncAll();
+  // One time repair in v6.1, and whenever photo pictures are missing on this phone: read every sail from the server.
+  // A server copy that is newer wins. A local copy that is newer keeps its edits but gets back any photos only the server has.
+  async function repairSails() {
+    if (!crew() || !navigator.onLine) return;
+    const needs = !store.get('repair61', false) || sails.some(t => (t.photos || []).some(p => !p.data));
+    if (!needs) return;
+    try {
+      const rs = await sb('sails?select=*'); let changed = false;
+      rs.forEach(r => { const u = Date.parse(r.updated_at); const loc = sails.find(t => t.id === r.id); if (!loc) return;
+        const sp = r.photos || [];
+        if (u >= loc.updated) { Object.assign(loc, { name: r.name || '', story: r.story || '', auto: r.auto || '', qa: r.qa || [], photos: sp, pts: r.pts || loc.pts, started: Date.parse(r.started) || loc.started, ended: Date.parse(r.ended) || loc.ended, wind: r.wind || loc.wind, events: r.events || loc.events || [], pending: !!r.pending, updated: u, deleted: !!r.deleted, by: r.device || '', dirty: false }); changed = true; }
+        else { const have = new Map((loc.photos || []).map(p => [p.id, p])); sp.forEach(p => { const h = have.get(p.id); if (!h) { loc.photos.push(p); changed = true; } else if (!h.data && p.data) { h.data = p.data; changed = true; } }); } });
+      store.set('repair61', true); if (changed) { saveSails(); renderMarks(); }
+    } catch (e) {}
+  }
+  sailsReady.then(() => { recoverTrack(); return repairSails(); }).then(syncAll);
   async function checkUpdate() {
     try { const r = await fetch('index.html?u=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return; const t = await r.text(); const m = t.match(/APP_VERSION = '([^']+)'/); if (m && m[1] !== APP_VERSION) $('#updatebar').classList.remove('hidden'); } catch (e) {}
   }
@@ -1538,7 +1743,7 @@ const SA = (() => {
     }
     windRaf = requestAnimationFrame(windFrame);
   }
-  function startWind() { if (!windOn || windRaf) return; sizeWind(); if (!particles.length) seed(Math.round(wc._w * wc._h / 14000)); windFrame(); }
+  function startWind() { if (!windOn || windRaf || (typeof saverUp === 'function' && saverUp())) return; sizeWind(); if (!particles.length) seed(Math.round(wc._w * wc._h / 14000)); windFrame(); }
   function stopWind() { if (windRaf) cancelAnimationFrame(windRaf); windRaf = null; wctx.clearRect(0, 0, wc._w || 0, wc._h || 0); }
   window.addEventListener('resize', () => { sizeWind(); particles = []; if (windOn) seed(Math.round(wc._w * wc._h / 14000)); });
   document.addEventListener('visibilitychange', () => { document.visibilityState === 'visible' ? startWind() : stopWind(); });
