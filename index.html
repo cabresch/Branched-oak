@@ -133,7 +133,41 @@
   #sv-grid .l { font-size: 11px; color: #8fa1ad; text-transform: uppercase; letter-spacing: .1em; }
   #sv-grid .v { font-size: 28px; font-weight: 700; line-height: 1.15; }
   #sv-grid .v small { font-size: 15px; color: #8fa1ad; font-weight: 500; margin-left: 3px; }
-  #sv-btns { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .sv-btnrow { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .sv-btnrow.hidden { display: none; }
+  #sv-race-btns { grid-template-columns: 1.4fr 1fr 1fr; }
+  #sv-btns button, .sv-btnrow button { font: 600 16px -apple-system, BlinkMacSystemFont, sans-serif; color: #e8eef2; background: #11181e; border: 1px solid #1d2a33; border-radius: 14px; padding: 16px 4px; }
+  #sv-race-btn { color: #ff9f40 !important; border-color: #4a2f12 !important; }
+  #rc-main-btn { color: #1a1a1a !important; background: #ff9f40 !important; border-color: #ff9f40 !important; font-size: 18px !important; }
+  #rc-end { color: #ff5a5a !important; border-color: #4a1a1a !important; }
+  /* Race mode on the recording screen: arrow to the next virtual mark, distance, then heel and speed */
+  #saver.racing #sv-heelbox, #saver.racing #sv-heel-start, #saver.racing #sv-sog, #saver.racing #sv-grid { display: none !important; }
+  #saver.flash { background: #2a1a05; }
+  #sv-race { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; justify-content: space-evenly; }
+  body.saver-on .leaflet-control-attribution { display: none; }
+  #sv-race.hidden { display: none; }
+  #rc-top { display: flex; justify-content: space-between; gap: 10px; font-size: 15px; color: #ff9f40; font-weight: 600; }
+  #rc-clock { color: #e8eef2; white-space: nowrap; }
+  #rc-count { text-align: center; font-size: min(26vw, 130px); font-weight: 800; line-height: 1; letter-spacing: -.02em; }
+  #rc-count.hidden { display: none; }
+  #rc-nav { display: flex; align-items: center; gap: 14px; justify-content: center; }
+  #rc-arrow { width: min(40vw, 190px); height: min(40vw, 190px); flex: none; transition: transform .4s; }
+  #rc-arrow path { fill: #ff9f40; }
+  #rc-arrow.dim path { fill: #3a4650; }
+  #rc-dbox b { font-size: min(20vw, 100px); font-weight: 800; line-height: 1; display: block; }
+  #rc-dbox span { color: #8fa1ad; font-size: 18px; text-transform: uppercase; letter-spacing: .08em; }
+  #rc-sub { text-align: center; color: #c9d4db; font-size: 16px; line-height: 1.35; min-height: 22px; }
+  #rc-hint { text-align: center; color: #5fd38d; font-size: 18px; font-weight: 600; min-height: 22px; }
+  .rc-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .rc-grid > div { border-top: 1px solid #1d2a33; padding-top: 6px; min-width: 0; }
+  .rc-grid .l { font-size: 11px; color: #8fa1ad; text-transform: uppercase; letter-spacing: .1em; }
+  .rc-grid .v { font-size: min(13vw, 52px); font-weight: 800; line-height: 1.1; }
+  .rc-grid .v small { font-size: 14px; color: #8fa1ad; font-weight: 500; margin-left: 2px; }
+  .rc-grid.small .v { font-size: 30px; font-weight: 700; }
+  .race-mark { width: 24px; height: 24px; border-radius: 50%; background: #ff9f40; color: #1a1a1a; font: 700 14px/24px -apple-system, sans-serif; text-align: center; border: 2px solid #0d2c42; }
+  .racetbl { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  .racetbl th, .racetbl td { text-align: left; padding: 4px 4px; border-bottom: 1px solid var(--line); }
+  .racetbl th { color: var(--muted); font-weight: 500; }
   #sv-btns button { font: 600 16px -apple-system, BlinkMacSystemFont, sans-serif; color: #e8eef2; background: #11181e; border: 1px solid #1d2a33; border-radius: 14px; padding: 16px 4px; }
   #sv-wp { color: #ffd84a !important; border-color: #4a3f12 !important; }
   #sv-stop { color: #ff5a5a !important; border-color: #4a1a1a !important; }
@@ -296,6 +330,8 @@
         <div class="card" style="padding:10px 6px 8px"><div class="awardstrip" id="awardstrip"></div><div class="toolbar" style="margin:6px 6px 0"><button class="btn sm" id="btn-awards">See the whole wall</button></div></div>
         <h2 style="margin-top:18px">Season Stats</h2>
         <div class="card" id="season-stats"><span class="muted">No sails yet.</span></div>
+        <h2 style="margin-top:18px">Races</h2>
+        <div class="card" id="race-board"><span class="muted">No races yet.</span></div>
         <h2 style="margin-top:18px">Marks</h2>
         <div class="small" id="syncstatus"></div>
         <div class="toolbar">
@@ -393,7 +429,17 @@
       <div><div class="l">Wind forecast</div><div class="v" id="sv-wind">–</div></div>
       <div><div class="l">Point of sail</div><div class="v" id="sv-pos" style="font-size:20px">–</div></div>
     </div>
-    <div id="sv-btns"><button id="sv-wp">Waypoint</button><button id="sv-map">Map</button><button id="sv-stop">Stop</button></div>
+    <div id="sv-race" class="hidden">
+      <div id="rc-top"><span id="rc-leg">Olympic course</span><span id="rc-clock"></span></div>
+      <div id="rc-count" class="hidden">5:00</div>
+      <div id="rc-nav"><svg id="rc-arrow" viewBox="0 0 100 100" aria-label="direction to the mark"><path d="M50 4 L82 84 L50 66 L18 84 Z"/></svg><div id="rc-dbox"><b id="rc-dist">–</b><span id="rc-unit"></span></div></div>
+      <div id="rc-sub"></div>
+      <div id="rc-hint"></div>
+      <div class="rc-grid"><div><div class="l">Heel</div><div class="v" id="rc-heel">–</div></div><div><div class="l">Speed</div><div class="v" id="rc-sog">–</div></div><div><div class="l">Toward mark</div><div class="v" id="rc-vmc">–</div></div></div>
+      <div class="rc-grid small"><div><div class="l">This leg</div><div class="v" id="rc-legt">–</div></div><div><div class="l">Last leg</div><div class="v" id="rc-last">–</div></div><div></div></div>
+    </div>
+    <div id="sv-norm-btns" class="sv-btnrow"><button id="sv-wp">Waypoint</button><button id="sv-race-btn">Race</button><button id="sv-map">Map</button><button id="sv-stop">Stop</button></div>
+    <div id="sv-race-btns" class="sv-btnrow hidden"><button id="rc-main-btn">Start 5 min</button><button id="rc-map">Map</button><button id="rc-end">Cancel</button></div>
   </div>
   <div id="rsheet" class="hidden">
     <div class="sheet-box" id="rsheet-box"></div>
@@ -612,9 +658,94 @@ const SA = (() => {
 })();
 </script>
 <script>
+/* Race course geometry for Branched Oak (v6.2). Pure functions, no page access, so it can be tested on its own.
+   Olympic course as the Lincoln Sailing Club writes it: Start, 1, 2, 3, 1, 3, Finish. All marks rounded to port.
+   Mark 1 is straight upwind, mark 3 straight downwind, mark 2 the wing mark to the left (looking upwind),
+   which is where a counterclockwise (port rounding) course puts it. Start and finish share one line just above mark 3. */
+(function (root) {
+  const LAT0 = 40.975, LON0 = -96.870, KX = 111320 * Math.cos(LAT0 * Math.PI / 180), KY = 110540;
+  const xy = p => ({ x: (p.lon - LON0) * KX, y: (p.lat - LAT0) * KY });
+  const ll = q => ({ lat: q.y / KY + LAT0, lon: q.x / KX + LON0 });
+  const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
+  const norm = d => ((d % 360) + 360) % 360;
+  const dist = (a, b) => { const A = xy(a), B = xy(b); return Math.hypot(B.x - A.x, B.y - A.y); };
+  const bearing = (a, b) => { const A = xy(a), B = xy(b); return norm(deg(Math.atan2(B.x - A.x, B.y - A.y))); };
+  const NM = 1852;
+
+  const OLYMPIC = {
+    id: 'olympic', name: 'Olympic course', lsc: '1 2 3 1 3 Finish',
+    legs: [ { to: '1', kind: 'beat' }, { to: '2', kind: 'reach' }, { to: '3', kind: 'reach' }, { to: '1', kind: 'beat' }, { to: '3', kind: 'run' }, { to: 'F', kind: 'beat' } ],
+    lapEnds: [2, 5] // lap 1 ends when leg index 2 (mark 3) is done, lap 2 at the finish
+  };
+  const LINE_HALF = 45, LINE_ABOVE_3 = 60, WING = 0.7, ZONE = 30, SHORE_MARGIN = 50;
+
+  // Lay the course with the start/finish line centered at c (lat/lon), wind coming from `from` (degrees), beat length in nm
+  function build(c, from, beatNm) {
+    const C = xy(c), L = beatNm * NM, b = rad(from), u = { x: Math.sin(b), y: Math.cos(b) }, l = { x: Math.sin(b - Math.PI / 2), y: Math.cos(b - Math.PI / 2) };
+    const m3 = { x: C.x - u.x * LINE_ABOVE_3, y: C.y - u.y * LINE_ABOVE_3 }, m1 = { x: m3.x + u.x * L, y: m3.y + u.y * L };
+    const mid = { x: (m1.x + m3.x) / 2, y: (m1.y + m3.y) / 2 }, m2 = { x: mid.x + l.x * WING * L, y: mid.y + l.y * WING * L };
+    const pin = { x: C.x + l.x * LINE_HALF, y: C.y + l.y * LINE_HALF }, rc = { x: C.x - l.x * LINE_HALF, y: C.y - l.y * LINE_HALF };
+    const course = { type: 'olympic', from: Math.round(norm(from)), beatNm, marks: { 1: ll(m1), 2: ll(m2), 3: ll(m3) }, line: { c: ll(C), pin: ll(pin), rc: ll(rc) } };
+    course.rhumbNm = legRhumbs(course).reduce((s, v) => s + v, 0) / NM;
+    return course;
+  }
+  // straight line length of each leg in meters
+  function legRhumbs(course) {
+    const p = k => k === 'F' || k === 'S' ? course.line.c : course.marks[k];
+    let prev = 'S'; return OLYMPIC.legs.map(g => { const d = dist(p(prev), p(g.to)); prev = g.to; return d; });
+  }
+
+  // Open water test against the shallowest closed contour at or below `depthFt` (6 ft by default; the wing keel draws 2.5 ft)
+  function waterFrom(gj, depthFt) {
+    if (!gj || !gj.features) return null;
+    const want = depthFt || 6;
+    const rings = gj.features.filter(f => f.properties && +f.properties.Depth === want && f.geometry && f.geometry.type === 'LineString')
+      .map(f => f.geometry.coordinates.map(([lon, lat]) => xy({ lat, lon })))
+      .filter(r => r.length > 20 && Math.hypot(r[0].x - r[r.length - 1].x, r[0].y - r[r.length - 1].y) < 30);
+    if (!rings.length) return null;
+    const bb = rings.reduce((b, r) => r.reduce((q, p) => ({ x0: Math.min(q.x0, p.x), x1: Math.max(q.x1, p.x), y0: Math.min(q.y0, p.y), y1: Math.max(q.y1, p.y) }), b), { x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9 });
+    const inside = (P) => { let c = false; for (const R of rings) for (let i = 0, j = R.length - 1; i < R.length; j = i++) { const a = R[i], q = R[j]; if ((a.y > P.y) !== (q.y > P.y) && P.x < (q.x - a.x) * (P.y - a.y) / (q.y - a.y) + a.x) c = !c; } return c; };
+    const shore = (P) => { let best = 1e9; for (const R of rings) for (let i = 1; i < R.length; i++) { const a = R[i - 1], q = R[i], dx = q.x - a.x, dy = q.y - a.y, L2 = dx * dx + dy * dy; const t = L2 ? Math.max(0, Math.min(1, ((P.x - a.x) * dx + (P.y - a.y) * dy) / L2)) : 0; const d = Math.hypot(P.x - a.x - t * dx, P.y - a.y - t * dy); if (d < best) best = d; } return best; };
+    return { inside, shore, bb, depthFt: want };
+  }
+  function fits(course, W) {
+    const P = [course.marks[1], course.marks[2], course.marks[3], course.line.pin, course.line.rc].map(xy);
+    for (const p of P) if (!W.inside(p)) return false;
+    const S = [[P[2], P[0]], [P[0], P[1]], [P[1], P[2]]];
+    for (const [a, b] of S) for (let k = 1; k < 12; k++) { const q = { x: a.x + (b.x - a.x) * k / 12, y: a.y + (b.y - a.y) * k / 12 }; if (!W.inside(q)) return false; }
+    for (const p of P) if (W.shore(p) < SHORE_MARGIN) return false;
+    return true;
+  }
+  // Find open water for the course nearest `near`. Tries the asked beat length first, then shorter ones.
+  function place(W, near, from, beatNm) {
+    const N = xy(near), sizes = [beatNm]; for (let s = beatNm - 0.05; s >= 0.199; s -= 0.05) sizes.push(Math.round(s * 100) / 100);
+    const cand = []; for (let x = W.bb.x0; x <= W.bb.x1; x += 75) for (let y = W.bb.y0; y <= W.bb.y1; y += 75) cand.push({ x, y, d: Math.hypot(x - N.x, y - N.y) });
+    cand.sort((a, b) => a.d - b.d);
+    for (const s of sizes) for (const c of cand) { if (!W.inside(c)) continue; const co = build(ll(c), from, s); if (fits(co, W)) return co; }
+    return null;
+  }
+
+  // Signed distance of p above the start/finish line (meters, positive = upwind = course side) and along it (0 at center)
+  function lineFrame(course, p) {
+    const C = xy(course.line.c), P = xy(p), b = rad(course.from), u = { x: Math.sin(b), y: Math.cos(b) }, l = { x: Math.sin(b - Math.PI / 2), y: Math.cos(b - Math.PI / 2) };
+    const dx = P.x - C.x, dy = P.y - C.y; return { up: dx * u.x + dy * u.y, along: dx * l.x + dy * l.y };
+  }
+  // Did the boat cross the line upwind between a and b? Returns the crossing time (ms) or null. A little slack at the ends for GPS.
+  function crossedUp(course, a, b) {
+    const fa = lineFrame(course, a), fb = lineFrame(course, b);
+    if (!(fa.up < 0 && fb.up >= 0)) return null;
+    const k = fa.up / (fa.up - fb.up), along = fa.along + (fb.along - fa.along) * k;
+    if (Math.abs(along) > LINE_HALF + 25) return null;
+    return a.t + (b.t - a.t) * k;
+  }
+
+  root.RC = { OLYMPIC, ZONE, LINE_HALF, NM, build, legRhumbs, waterFrom, fits, place, lineFrame, crossedUp, dist, bearing, norm };
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>
 (function () {
   'use strict';
-  const APP_VERSION = '6.1';
+  const APP_VERSION = '6.2';
   const LAKE = { lat: 40.975, lon: -96.870, zoom: 14 };
   const DRAFT_FT = 2.5;
   const CONTOUR_URL = "https://services5.arcgis.com/IOshH1zLrIieqrNk/arcgis/rest/services/LakeContours/FeatureServer/0/query"
@@ -767,6 +898,7 @@ const SA = (() => {
     $('#hud-sub').innerHTML = (recording ? '<span class="rec">● REC</span> ' : '') + `±${Math.round(accuracy)} m${accuracy > 20 ? ' <span class="rec">weak</span>' : ''} · ${fmtTime(new Date(p.timestamp))}`;
     if (followMe && !saverUp()) map.panTo(ll, { animate: true, duration: .5 });
     lastPos = { lat, lon, t: p.timestamp, acc: accuracy, kn };
+    if (recording) { try { raceOnPos({ lat, lon, t: p.timestamp, acc: accuracy }); } catch (e) { console.warn('race', e); } }
     if (recording && accuracy < 50) {
       const prev = track[track.length - 1];
       if (!prev || map.distance([prev.lat, prev.lon], ll) > 3) { const fx = { lat, lon, t: p.timestamp, acc: Math.round(accuracy) }; if (speed != null && speed >= 0) fx.spd = Math.round(speed * 100) / 100; track.push(fx); trackLine.addLatLng(ll); if (track.length % 10 === 0) saveCurrentTrack(); }
@@ -859,8 +991,8 @@ const SA = (() => {
     box.querySelector('#ts-cancel').addEventListener('click', closeRouteSheet);
   }
   function writeAuto(t) { t.auto = liveStory(t); }
-  function finishSail(pts, recovered, events) {
-    const s = touch({ id: newId(), name: '', story: '', auto: '', qa: [], photos: [], wind: windNow(), events: events || [], pending: false, started: pts[0].t, ended: pts[pts.length - 1].t, pts, deleted: false, by: crewName(), recovered: !!recovered });
+  function finishSail(pts, recovered, events, races) {
+    const s = touch({ id: newId(), name: '', story: '', auto: '', qa: (races || []).map(r => ({ ...r, id: 'race', status: r.status === 'live' ? 'dnf' : r.status })), photos: [], wind: windNow(), events: events || [], pending: false, started: pts[0].t, ended: pts[pts.length - 1].t, pts, deleted: false, by: crewName(), recovered: !!recovered });
     writeAuto(s); sails.unshift(s); saveSails(); syncSoon(); return s;
   }
   // Photos sheet for a sail
@@ -886,14 +1018,15 @@ const SA = (() => {
     box.querySelector('#ph-close').addEventListener('click', closeRouteSheet); }
   $('#btn-track').addEventListener('click', async () => {
     if (!recording) {
-      recording = true; track = []; trackEvents = []; if (liveLayer) map.removeLayer(liveLayer); liveLayer = L.layerGroup().addTo(map); trackLine = L.polyline([], { color: '#ffcc4d', weight: 3, opacity: .9 }).addTo(liveLayer); $('#btn-wp').classList.remove('hidden'); placeWpBtn(); showSail(null);
+      recording = true; track = []; trackEvents = []; racesDone = []; race = null; localStorage.removeItem('races_current'); if (liveLayer) map.removeLayer(liveLayer); liveLayer = L.layerGroup().addTo(map); trackLine = L.polyline([], { color: '#ffcc4d', weight: 3, opacity: .9 }).addTo(liveLayer); $('#btn-wp').classList.remove('hidden'); placeWpBtn(); showSail(null);
       $('#btn-track').classList.add('on'); startGps(); saverStart(); await requestWake(); toast(wakeStatus === 'on' ? 'Recording sail. Screen will stay on.' : 'Recording sail. Keep the screen on manually.');
     } else {
+      if (race) endRace('dnf'); closeRouteSheet();
       recording = false; $('#btn-track').classList.remove('on'); saverStop();
       applyWake();
-      $('#btn-wp').classList.add('hidden'); if (track.length > 1) { finishSail(track, false, trackEvents); toast('Sail saved (' + track.length + ' points)'); let fresh = []; try { fresh = renderAwards(); } catch (e) {} if (fresh.length) setTimeout(() => { toast('New Sail earned: ' + fresh.map(r => r.aw.name).join(', '), 4000); openAward(fresh[0].aw.id); }, 800); }
+      $('#btn-wp').classList.add('hidden'); if (track.length > 1) { finishSail(track, false, trackEvents, racesDone); toast('Sail saved (' + track.length + ' points)'); let fresh = []; try { fresh = renderAwards(); } catch (e) {} if (fresh.length) setTimeout(() => { toast('New Sail earned: ' + fresh.map(r => r.aw.name).join(', '), 4000); openAward(fresh[0].aw.id); }, 800); }
       else toast('Sail too short to save');
-      localStorage.removeItem('track_current'); track = []; trackEvents = []; $('#hud-sub').textContent = lastPos ? `±${Math.round(lastPos.acc)} m` : 'GPS on';
+      localStorage.removeItem('track_current'); localStorage.removeItem('races_current'); racesDone = []; track = []; trackEvents = []; $('#hud-sub').textContent = lastPos ? `±${Math.round(lastPos.acc)} m` : 'GPS on';
     }
   });
   /* ---------- Battery saver screen ---------- */
@@ -910,6 +1043,7 @@ const SA = (() => {
     if (peekUntil && Date.now() < peekUntil) { if (saverUp()) saverShow(false); }
     else { peekUntil = 0; if (!saverUp()) saverShow(true); }
     if (!saverUp()) return;
+    raceRender();
     const el = Math.max(0, Date.now() - recStart) / 1000, h = Math.floor(el / 3600), m = Math.floor(el % 3600 / 60);
     $('#sv-time').textContent = (h ? h + ':' + String(m).padStart(2, '0') : m + ' min') + ' recording';
     $('#sv-gps').textContent = lastPos ? '±' + Math.round(lastPos.acc) + ' m' + (lastPos.acc > 20 ? ' weak' : '') : 'no GPS';
@@ -933,6 +1067,209 @@ const SA = (() => {
   ['movestart', 'zoomstart', 'click'].forEach(ev => map.on(ev, () => { if (peekUntil) peekUntil = Math.max(peekUntil, Date.now() + 30000); }));
   $('#sv-wp').addEventListener('click', () => $('#btn-wp').click());
   $('#sv-heel-start').addEventListener('click', () => heelStart());
+  /* ---------- Race mode: a self-run Olympic course with virtual marks (v6.2) ---------- */
+  // Lives on the black recording screen. Phases: 'pre' (course laid, sail to the line), 'count' (start countdown), 'racing'.
+  // Finished or abandoned races go into racesDone and are saved with the sail (in its qa list as { id: 'race', ... }), so they sync.
+  let race = null, racesDone = store.get('races_current', []) || [], racePrev = null, raceAudio = null, raceFlashUntil = 0, raceLayer = L.layerGroup().addTo(map);
+  const BL_M = 22 * 0.3048; // one Catalina 22 boat length in meters
+  const raceSave = () => store.set('races_current', race ? racesDone.concat([{ ...race, status: 'live' }]) : racesDone);
+  const fmtClock = (ms) => { const neg = ms < 0, s = Math.round(Math.abs(ms) / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60; return (neg ? '-' : '') + (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(ss).padStart(2, '0'); };
+  const fmtDist = (m) => m >= 0.1 * 1852 ? { v: (m / 1852).toFixed(2), u: 'nm' } : { v: String(Math.round(m * 1.0936)), u: 'yd' };
+  const fmtLine = (m) => { const a = Math.abs(m); return a < 15 * BL_M ? (a / BL_M).toFixed(1) + ' boat lengths' : Math.round(a * 1.0936) + ' yd'; };
+  const angDiff = (a, b) => ((a - b + 540) % 360) - 180; // a relative to b, -180..180
+  const legName = (to) => to === 'F' ? 'the finish' : 'mark ' + to;
+  function nmBetween(t0, t1) { let d = 0; for (let i = 1; i < track.length; i++) { const a = track[i - 1], b = track[i]; if (b.t <= t0 || a.t >= t1) continue; const dt = (b.t - a.t) / 1000, m = SA.dist(a, b); if (dt > 0 && !(dt > 30 && m > 30) && m / dt * 1.94384 <= 9) d += m; } return d / 1852; }
+
+  function beep(freq, ms, vol) {
+    try { if (!raceAudio) return; const o = raceAudio.createOscillator(), g = raceAudio.createGain(); o.type = 'square'; o.frequency.value = freq; g.gain.value = vol || 0.25; o.connect(g); g.connect(raceAudio.destination); o.start(); o.stop(raceAudio.currentTime + ms / 1000); } catch (e) {}
+    try { if (navigator.vibrate) navigator.vibrate(Math.min(ms, 800)); } catch (e) {}
+  }
+  const horn = () => { beep(660, 900, 0.35); raceFlashUntil = Date.now() + 1200; };
+  function audioOn() { try { raceAudio = raceAudio || new (window.AudioContext || window.webkitAudioContext)(); if (raceAudio.state === 'suspended') raceAudio.resume(); beep(880, 60, 0.05); } catch (e) {} }
+
+  function raceEvent(name, t) { const p = lastPos; const e = { id: newId(), t: Math.round(t || Date.now()), lat: p ? p.lat : null, lon: p ? p.lon : null, kind: 'other', name }; trackEvents.push(e); saveCurrentTrack(); if (p && liveLayer) L.circleMarker([p.lat, p.lon], { radius: 5, color: '#0d2c42', weight: 1.5, fillColor: '#ff9f40', fillOpacity: 1 }).addTo(liveLayer).bindPopup(fmtTime(new Date(e.t)) + ' · ' + name, { className: 'turnpop' }); }
+
+  function drawCourse(co, layer) {
+    const g = layer || raceLayer; if (!layer) g.clearLayers(); if (!co) return;
+    const p = k => k === 'F' || k === 'S' ? co.line.c : co.marks[k]; let prev = 'S';
+    RC.OLYMPIC.legs.forEach(l => { L.polyline([[p(prev).lat, p(prev).lon], [p(l.to).lat, p(l.to).lon]], { color: '#ff9f40', weight: 1.5, opacity: .7, dashArray: '4 6', interactive: false }).addTo(g); prev = l.to; });
+    L.polyline([[co.line.pin.lat, co.line.pin.lon], [co.line.rc.lat, co.line.rc.lon]], { color: '#ffffff', weight: 3, opacity: .9 }).addTo(g).bindPopup('Start and finish line. Cross it heading upwind.', { className: 'turnpop' });
+    ['1', '2', '3'].forEach(k => { const m = co.marks[k]; L.circle([m.lat, m.lon], { radius: RC.ZONE, color: '#ff9f40', weight: 1, fillOpacity: .08, interactive: false }).addTo(g);
+      L.marker([m.lat, m.lon], { icon: L.divIcon({ className: '', html: `<div class="race-mark">${k}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] }) }).addTo(g).bindPopup(`Mark ${k}, round to port (leave it on your left)`, { className: 'turnpop' }); });
+  }
+
+  // Setup sheet: wind, size, where to lay it
+  let rsWind = null, rsSize = 0.35, rsWhere = 'near';
+  function openRaceSetup() {
+    if (!recording) return; const w = liveWind(); if (rsWind == null) rsWind = w.kn != null ? Math.round(w.from) : null;
+    const box = $('#rsheet-box'); $('#rsheet').classList.remove('hidden');
+    const sizes = [0.25, 0.35, 0.5].map(s => `<button class="btn sm${s === rsSize ? ' primary' : ''}" data-rs-size="${s}">${s} nm</button>`).join('');
+    box.innerHTML = `<h2>Olympic course</h2>
+      <div class="small muted" style="margin-bottom:10px">Lincoln Sailing Club order: start, 1, 2, 3, 1, 3, finish. Every mark to port (on your left). Mark 1 is upwind, 2 is the wing mark, 3 is downwind. Start and finish on the same line, crossing it upwind.</div>
+      <div><b>Wind from</b> ${rsWind != null ? `<b style="font-size:20px">${rsWind}°</b> ${compass(rsWind)}${w.kn != null ? ' · forecast ' + Math.round(w.kn) + ' kn from ' + Math.round(w.from) + '°' : ''}` : '<span class="muted">no forecast loaded</span>'}</div>
+      <div class="small muted">If the water says otherwise (other boats, flags, your telltales), nudge it.</div>
+      <div class="toolbar" style="margin-top:6px"><button class="btn sm" data-rs-w="-10">−10°</button><button class="btn sm" data-rs-w="-5">−5°</button><button class="btn sm" data-rs-w="5">+5°</button><button class="btn sm" data-rs-w="10">+10°</button>${w.kn != null ? '<button class="btn sm" data-rs-w="reset">Forecast</button>' : ''}</div>
+      ${rsWind == null ? '<div class="toolbar"><input type="number" id="rs-wset" inputmode="numeric" placeholder="degrees, e.g. 200" style="max-width:150px"><button class="btn sm" id="rs-wok">Set</button></div>' : ''}
+      <div style="margin-top:12px"><b>Size</b> <span class="small muted">(length of the beat; the whole course is about 4.7 times this)</span></div>
+      <div class="toolbar" style="margin-top:6px">${sizes}</div>
+      <div style="margin-top:12px"><b>Where</b></div>
+      <div class="toolbar" style="margin-top:6px"><button class="btn sm${rsWhere === 'near' ? ' primary' : ''}" data-rs-where="near">Open water nearest me</button><button class="btn sm${rsWhere === 'here' ? ' primary' : ''}" data-rs-where="here">Start line right here</button></div>
+      <div class="small muted">Nearest open water keeps every mark inside the 6 ft depth line and 50 m off the shore line. It does not know about swim beaches, no wake zones or other boats, so look before you go.</div>
+      <div class="toolbar" style="margin-top:14px"><button class="btn primary" id="rs-go">Lay the course</button><button class="btn" id="rs-cancel">Cancel</button></div>`;
+    box.querySelectorAll('[data-rs-w]').forEach(b => b.addEventListener('click', () => { const v = b.dataset.rsW; rsWind = v === 'reset' ? Math.round(liveWind().from) : RC.norm(rsWind + +v); openRaceSetup(); }));
+    box.querySelectorAll('[data-rs-size]').forEach(b => b.addEventListener('click', () => { rsSize = +b.dataset.rsSize; openRaceSetup(); }));
+    box.querySelectorAll('[data-rs-where]').forEach(b => b.addEventListener('click', () => { rsWhere = b.dataset.rsWhere; openRaceSetup(); }));
+    const wok = box.querySelector('#rs-wok'); if (wok) wok.addEventListener('click', () => { const v = parseFloat(box.querySelector('#rs-wset').value); if (isFinite(v)) { rsWind = RC.norm(Math.round(v)); openRaceSetup(); } });
+    box.querySelector('#rs-cancel').addEventListener('click', closeRouteSheet);
+    box.querySelector('#rs-go').addEventListener('click', () => layCourse());
+  }
+  function layCourse() {
+    if (rsWind == null) { toast('Set the wind direction first'); return; }
+    if (!lastPos) { toast('Waiting for GPS. Try again in a moment.'); return; }
+    let co = null; const cached = store.get('contours', null), W = cached ? RC.waterFrom(cached.gj, 6) : null;
+    if (rsWhere === 'here') { co = RC.build(lastPos, rsWind, rsSize); if (W && !RC.fits(co, W)) toast('Heads up: part of this course is near shallow water or shore. Check the map.', 7000); }
+    else if (!W) { co = RC.build(lastPos, rsWind, rsSize); toast('No depth contours saved on this phone, so the course was laid right here. Check the map.', 7000); }
+    else { co = RC.place(W, lastPos, rsWind, rsSize); if (!co) { toast('Could not fit that course in open water. Try a smaller size.', 6000); return; } if (co.beatNm !== rsSize) toast('Only a ' + co.beatNm + ' nm course fit in open water near you', 6000); }
+    const w = liveWind();
+    race = { rid: newId(), course: co, wind: { from: rsWind, kn: w.kn != null ? Math.round(w.kn) : null }, phase: 'pre', laid: Date.now(), gun: null, start: null, behindM: null, ocs: false, leg: 0, splits: [] };
+    closeRouteSheet(); drawCourse(co); raceSave(); racePrev = null; saverRender();
+  }
+
+  function startCountdown(min) { if (!race) return; audioOn(); race.phase = 'count'; race.gun = Date.now() + min * 60000; race.sig = {}; horn(); raceSave(); saverRender(); }
+  function endRace(status) {
+    if (!race) return; const r = race; race = null;
+    if (r.gun && r.phase === 'racing') { r.status = status || 'finished'; r.sailedNm = nmBetween(r.start || r.gun, r.finish || Date.now()); racesDone.push(r); raceSave(); if (r.status === 'finished') showRaceResult(r); else toast('Race ended and saved as not finished'); }
+    else raceSave();
+    drawCourse(null); racePrev = null; saverRender();
+  }
+  function roundMark(t) {
+    const r = race, leg = RC.OLYMPIC.legs[r.leg], now = t || Date.now();
+    const from = r.leg ? r.splits[r.leg - 1].t : (r.start || r.gun);
+    r.splits.push({ leg: r.leg, to: leg.to, t: now, ms: now - from, nm: Math.round(nmBetween(from, now) * 1000) / 1000 });
+    raceEvent(leg.to === 'F' ? 'Finish' : 'Rounded mark ' + leg.to, now);
+    if (leg.to === 'F') { r.finish = now; r.elapsed = now - r.gun; horn(); endRace('finished'); return; }
+    beep(990, 250); beep(1320, 250); raceFlashUntil = Date.now() + 800;
+    r.leg++; raceSave(); toast('Mark ' + leg.to + ' rounded · ' + fmtClock(now - from), 3000);
+  }
+  function raceStarted(t) { race.start = Math.round(t); raceEvent('Started', t); beep(1320, 200); raceSave(); }
+
+  // called from onPos with each good fix
+  function raceOnPos(p) {
+    if (!race || !race.course || p.acc > 30) { if (p.acc <= 30) racePrev = p; return; }
+    const prev = racePrev; racePrev = p;
+    if (race.phase !== 'racing' || !prev) return;
+    if (!race.start) { const tc = RC.crossedUp(race.course, prev, p); if (tc && tc >= race.gun) raceStarted(tc); return; }
+    const leg = RC.OLYMPIC.legs[race.leg];
+    if (leg.to === 'F') { const tc = RC.crossedUp(race.course, prev, p); if (tc) roundMark(tc); }
+    else if (RC.dist(p, race.course.marks[leg.to]) <= RC.ZONE) roundMark(p.t);
+  }
+  // countdown signals, run from the 250 ms screen tick
+  function raceTick() {
+    if (!race || race.phase !== 'count') return; const left = race.gun - Date.now(), s = Math.ceil(left / 1000);
+    const sig = (k, fn) => { if (!race.sig[k]) { race.sig[k] = 1; fn(); } };
+    if (s <= 240 && s > 235) sig('4', horn);
+    if (s <= 60 && s > 55) sig('1', horn);
+    if (s <= 10 && s >= 1) sig('s' + s, () => beep(880, 120));
+    if (left <= 0) {
+      race.phase = 'racing'; horn();
+      const f = lastPos ? RC.lineFrame(race.course, lastPos) : null;
+      if (f) { race.behindM = Math.round(-f.up); race.ocs = f.up > 0 && Math.abs(f.along) < RC.LINE_HALF + 40; }
+      raceEvent('Gun', race.gun); raceSave();
+    }
+  }
+
+  function raceRender() {
+    const on = !!race; $('#saver').classList.toggle('racing', on); $('#sv-race').classList.toggle('hidden', !on);
+    $('#sv-norm-btns').classList.toggle('hidden', on); $('#sv-race-btns').classList.toggle('hidden', !on);
+    if (!on) { $('#saver').classList.remove('flash'); return; }
+    raceTick();
+    $('#saver').classList.toggle('flash', Date.now() < raceFlashUntil);
+    const r = race, co = r.course, p = lastPos, now = Date.now();
+    let target, label, sub = '';
+    const count = $('#rc-count'); count.classList.toggle('hidden', r.phase !== 'count');
+    const f = p ? RC.lineFrame(co, p) : null;
+    if (r.phase !== 'racing' || !r.start) {
+      target = co.line.c; label = r.phase === 'racing' ? 'Start now: cross the line upwind' : 'To the start line';
+      if (f) { const over = f.up > 0; sub = (over ? '<span style="color:#ff5a5a">Over the line, course side</span> ' : 'Below the line ') + fmtLine(f.up) + (Math.abs(f.along) > RC.LINE_HALF ? ' · ' + (f.along > 0 ? 'left of the pin end' : 'right of the committee end') : ''); }
+      if (r.phase === 'racing' && r.ocs) sub = '<span style="color:#ff5a5a">Over early at the gun. Dip below the line and start again.</span>';
+    } else { const leg = RC.OLYMPIC.legs[r.leg]; target = leg.to === 'F' ? co.line.c : co.marks[leg.to]; label = 'Leg ' + (r.leg + 1) + ' of 6 · to ' + legName(leg.to) + ' · ' + leg.kind; }
+    $('#rc-leg').textContent = label;
+    $('#rc-clock').textContent = r.phase === 'racing' ? fmtClock(Math.max(0, now - r.gun)) : r.phase === 'count' ? 'Gun at ' + fmtTime(new Date(r.gun)) : 'Course laid';
+    if (r.phase === 'count') { const left = r.gun - now; count.textContent = fmtClock(Math.max(0, left)); count.style.color = left <= 60000 ? '#ff5a5a' : left <= 240000 ? '#e2b84a' : '#e8eef2'; }
+    const arrow = $('#rc-arrow');
+    if (p && target) {
+      const d = RC.dist(p, target), brg = RC.bearing(p, target), fd = fmtDist(d);
+      $('#rc-dist').textContent = fd.v; $('#rc-unit').textContent = fd.u;
+      if (lastCog != null && lastKn > 0.8) { const rel = angDiff(brg, lastCog); arrow.style.transform = `rotate(${rel}deg)`; arrow.classList.remove('dim'); sub = (sub ? sub + '<br>' : '') + Math.round(brg) + '° · ' + (Math.abs(rel) < 6 ? 'dead ahead' : Math.round(Math.abs(rel)) + '° to ' + (rel < 0 ? 'port' : 'starboard')); }
+      else { arrow.style.transform = 'rotate(0deg)'; arrow.classList.add('dim'); sub = (sub ? sub + '<br>' : '') + 'Steer ' + Math.round(brg) + '° (arrow works once moving)'; }
+      // speed toward the target
+      const vmc = lastKn != null && lastCog != null ? lastKn * Math.cos((brg - lastCog) * Math.PI / 180) : null;
+      $('#rc-vmc').innerHTML = vmc != null ? vmc.toFixed(1) + '<small>kn</small>' : '–';
+      $('#rc-hint').textContent = raceHint(r, brg);
+    } else { $('#rc-dist').textContent = '–'; $('#rc-unit').textContent = ''; arrow.classList.add('dim'); sub = 'Waiting for GPS'; $('#rc-vmc').textContent = '–'; $('#rc-hint').textContent = ''; }
+    $('#rc-sub').innerHTML = sub;
+    $('#rc-heel').innerHTML = heelOn && heelCur != null ? Math.round(Math.abs(heelCur)) + '<small>°</small>' : '–';
+    $('#rc-heel').style.color = heelOn && heelCur != null ? (Math.round(Math.abs(heelCur)) >= 21 ? '#ff5a5a' : Math.round(Math.abs(heelCur)) >= 15 ? '#e2b84a' : '#5fd38d') : '';
+    $('#rc-sog').innerHTML = lastKn != null ? lastKn.toFixed(1) + '<small>kn</small>' : '–';
+    const legStart = r.phase === 'racing' ? (r.splits.length ? r.splits[r.splits.length - 1].t : (r.start || r.gun)) : null;
+    $('#rc-legt').textContent = legStart ? fmtClock(Math.max(0, now - legStart)) : '–';
+    $('#rc-last').textContent = r.splits.length ? fmtClock(r.splits[r.splits.length - 1].ms) : '–';
+    // buttons
+    const main = $('#rc-main-btn');
+    if (r.phase === 'pre') main.textContent = 'Start 5 min'; else if (r.phase === 'count') main.textContent = 'Gun now'; else if (!r.start) main.textContent = 'I started'; else { const to = RC.OLYMPIC.legs[r.leg].to; main.textContent = to === 'F' ? 'I finished' : 'Rounded ' + to; }
+    $('#rc-end').textContent = r.phase === 'racing' ? 'End race' : 'Cancel';
+  }
+  // A plain hint per leg. On a beat it uses your own tacking angle: the other tack is your heading mirrored across the wind.
+  function raceHint(r, brg) {
+    if (r.phase !== 'racing' || !r.start) return r.phase === 'pre' ? 'Tap Start for the 5 minute sequence' : '';
+    const leg = RC.OLYMPIC.legs[r.leg], from = r.wind.from;
+    if (leg.kind !== 'beat') return leg.kind === 'run' ? 'Run: wind behind you' : 'Reach: wind on the side';
+    if (lastCog == null || lastKn == null || lastKn < 1) return 'Beat to ' + legName(leg.to);
+    const cur = angDiff(lastCog, from), other = -cur, mk = angDiff(brg, from);
+    if (Math.abs(cur) < 30) return 'Pinching? Bear off a little';
+    if (Math.sign(mk) === Math.sign(other) && Math.abs(mk) >= Math.abs(other) - 3) return 'Tack now: you can lay it';
+    if (Math.sign(mk) === Math.sign(cur) && Math.abs(mk) <= Math.abs(cur) + 3 && Math.abs(mk) >= Math.abs(cur) - 8) return 'Laying it: hold this course';
+    if (Math.sign(mk) === Math.sign(cur) && Math.abs(mk) > Math.abs(cur) + 3) return 'Past the layline: ease off';
+    return 'Keep beating';
+  }
+  function showRaceResult(r) {
+    const box = $('#rsheet-box'); $('#rsheet').classList.remove('hidden');
+    box.innerHTML = `<h2>Finished · ${fmtClock(r.elapsed)}</h2>${raceSummaryHtml(r)}<div class="toolbar" style="margin-top:12px"><button class="btn primary" id="rr-ok">Done</button></div>`;
+    box.querySelector('#rr-ok').addEventListener('click', closeRouteSheet);
+  }
+  function raceSummaryHtml(r) {
+    const rh = RC.legRhumbs(r.course), legs = RC.OLYMPIC.legs;
+    const rows = (r.splits || []).map(s => { const plan = rh[s.leg] / 1852, extra = plan > 0 && s.nm ? Math.round((s.nm / plan - 1) * 100) : null; return `<tr><td>${s.leg + 1}. to ${s.to === 'F' ? 'finish' : 'mark ' + s.to}</td><td>${legs[s.leg].kind}</td><td>${fmtClock(s.ms)}</td><td>${s.nm ? s.nm.toFixed(2) : '–'}</td><td>${extra != null ? (extra >= 0 ? '+' : '') + extra + '%' : ''}</td></tr>`; }).join('');
+    const lap1 = r.splits && r.splits[2] ? r.splits[2].t - (r.start || r.gun) : null, lap2 = r.finish && r.splits[2] ? r.finish - r.splits[2].t : null;
+    const startLine = r.start ? `Crossed the line ${fmtClock(r.start - r.gun)} after the gun` + (r.behindM != null ? (r.behindM >= 0 ? ', ' + fmtLine(r.behindM) + ' behind it at the gun' : ', over early at the gun') : '') : 'No start crossing recorded';
+    return `<div class="small">${r.course.beatNm} nm beat · ${r.course.rhumbNm.toFixed(2)} nm of course · wind ${r.wind.from}° ${compass(r.wind.from)}${r.wind.kn != null ? ' ' + r.wind.kn + ' kn (forecast)' : ''}</div>
+      <div class="small" style="margin-top:4px">${startLine}.</div>
+      ${lap1 ? `<div class="small" style="margin-top:4px">Lap 1 (triangle) ${fmtClock(lap1)}${lap2 ? ' · Lap 2 (up and down) ' + fmtClock(lap2) : ''}</div>` : ''}
+      ${r.sailedNm ? `<div class="small" style="margin-top:4px">Sailed ${r.sailedNm.toFixed(2)} nm for ${r.course.rhumbNm.toFixed(2)} nm of course.</div>` : ''}
+      <table class="racetbl"><tr><th>Leg</th><th></th><th>Time</th><th>nm</th><th>Extra</th></tr>${rows}</table>`;
+  }
+
+  $('#sv-race-btn').addEventListener('click', openRaceSetup);
+  $('#rc-main-btn').addEventListener('click', () => {
+    if (!race) return;
+    if (race.phase === 'pre') return startCountdown(5);
+    if (race.phase === 'count') { if (confirm('Fire the gun now?')) { race.gun = Date.now(); raceTick(); saverRender(); } return; }
+    if (!race.start) return raceStarted(Date.now());
+    roundMark(Date.now()); saverRender();
+  });
+  $('#rc-end').addEventListener('click', () => { if (!race) return; if (race.phase === 'racing') { if (confirm('End this race? It is saved as not finished.')) endRace('dnf'); } else { race = null; raceSave(); drawCourse(null); saverRender(); } });
+  $('#rc-map').addEventListener('click', () => $('#sv-map').click());
+  // Race results across all sails: pace in minutes per nm of course, so different sizes compare
+  function allRaces() { const out = []; sails.filter(t => !t.deleted).forEach(t => (t.qa || []).forEach(q => { if (q && q.id === 'race' && q.status === 'finished' && q.elapsed) out.push({ ...q, sail: t }); })); return out.sort((a, b) => b.gun - a.gun); }
+  const windBand = kn => kn == null ? 'unknown' : kn < 8 ? 'light' : kn <= 14 ? 'medium' : 'fresh';
+  function renderRaceBoard() {
+    const el = $('#race-board'); if (!el) return; const rs = allRaces();
+    if (!rs.length) { el.innerHTML = '<span class="muted">No races yet. While recording, tap Race on the recording screen to lay an Olympic course.</span>'; return; }
+    const pace = r => r.elapsed / 60000 / r.course.rhumbNm, best = {};
+    rs.forEach(r => { const b = windBand(r.wind.kn); if (!best[b] || pace(r) < pace(best[b])) best[b] = r; });
+    el.innerHTML = `<div class="small muted" style="margin-bottom:6px">Pace is minutes per nm of course, so a short and a long course compare. Bests are kept per wind band (light under 8 kn, medium 8 to 14, fresh over 14).</div>
+      <table class="racetbl"><tr><th>Date</th><th>Size</th><th>Wind</th><th>Time</th><th>Pace</th></tr>${rs.map(r => { const b = windBand(r.wind.kn); return `<tr><td>${new Date(r.gun).toLocaleDateString([], { month: 'short', day: 'numeric' })}</td><td>${r.course.beatNm}</td><td>${b}${r.wind.kn != null ? ' ' + r.wind.kn : ''}</td><td>${fmtClock(r.elapsed)}</td><td>${pace(r).toFixed(1)}${best[b] === r ? ' <span style="color:var(--accent)">best</span>' : ''}</td></tr>`; }).join('')}</table>`;
+  }
   $('#sv-heelbox').addEventListener('click', () => { if (heelOn) openHeelSheet(); }); // Zero and Swap sides, same sheet as the strip
   let stopArm = null;
   $('#sv-stop').addEventListener('click', () => {
@@ -940,7 +1277,7 @@ const SA = (() => {
     if (!stopArm) { b.classList.add('arm'); b.textContent = 'Tap again'; stopArm = setTimeout(() => { stopArm = null; b.classList.remove('arm'); b.textContent = 'Stop'; }, 3000); return; }
     clearTimeout(stopArm); stopArm = null; b.classList.remove('arm'); b.textContent = 'Stop'; $('#btn-track').click();
   });
-  function recoverTrack() { const cur = store.get('track_current', null); if (cur && cur.pts && cur.pts.length > 1) { finishSail(cur.pts, true, cur.events || []); localStorage.removeItem('track_current'); } }
+  function recoverTrack() { const cur = store.get('track_current', null); if (cur && cur.pts && cur.pts.length > 1) { finishSail(cur.pts, true, cur.events || [], store.get('races_current', []) || []); localStorage.removeItem('track_current'); } localStorage.removeItem('races_current'); racesDone = []; }
 
   function trackStats(t) {
     let dist = 0; for (let i = 1; i < t.pts.length; i++) dist += map.distance([t.pts[i - 1].lat, t.pts[i - 1].lon], [t.pts[i].lat, t.pts[i].lon]);
@@ -991,6 +1328,7 @@ const SA = (() => {
       return `<div class="markitem"><div class="name">${t.name ? esc(t.name) : new Date(t.started).toLocaleDateString()}</div>
       ${full.trim() ? `<div class="story clamp" data-story="s${t.id}">${esc(full)}</div><button class="linkbtn" data-more="s${t.id}">Read more</button>` : ''}
       ${(() => { const tp = topSpeed(t); if (!tp) return ''; return `<div class="small" style="margin-top:6px">Top speed ${tp.kn.toFixed(1)} kn${tp.src ? ' <span style="color:var(--accent)">✓ confirmed</span>' : ' (GPS)'} <button class="linkbtn" data-top="${t.id}">${tp.src ? 'Change' : 'Confirm'}</button></div>`; })()}
+      ${(t.qa || []).filter(q => q && q.id === 'race').map(r => `<div class="small" style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px"><b>Olympic course${r.status === 'finished' ? ' · ' + fmtClock(r.elapsed) : ' · not finished'}</b></div>${r.status === 'finished' ? raceSummaryHtml(r) : ''}`).join('')}
       ${(t.photos || []).some(p => p.data) ? `<div class="photos">${t.photos.filter(p => p.data).map(p => `<img src="${p.data}" data-ph="${t.id}:${p.id}" alt="">`).join('')}</div>` : ''}
       <div class="toolbar"><button class="btn sm" data-iv="${t.id}">Add photos</button><button class="btn sm" data-show="${t.id}">Show on map</button><button class="btn sm" data-sedit="${t.id}">Edit</button><button class="btn sm" data-gpx="${t.id}">Share GPX</button><button class="btn sm danger" data-del="${t.id}">Delete</button></div></div>`; }).join('');
     el.querySelectorAll('[data-top]').forEach(b => b.addEventListener('click', () => openTopSpeed(sails.find(x => x.id == b.dataset.top))));
@@ -1041,6 +1379,7 @@ const SA = (() => {
     (a.turns || []).forEach(tr => { const kind = SA.turnKind(tr, t.wind ? t.wind.from : null); L.circleMarker([tr.lat, tr.lon], { radius: 5, color: '#0d2c42', weight: 1.5, fillColor: '#4fb2e7', fillOpacity: 1 }).addTo(sailLayer).bindPopup(`${fmtTime(new Date(tr.t))} · ${kind.charAt(0).toUpperCase() + kind.slice(1)} (${SA.compass(tr.from)} to ${SA.compass(tr.to)})`, { className: 'turnpop' }); });
     // waypoints
     (t.events || []).forEach(e => { if (e.lat == null) return; L.circleMarker([e.lat, e.lon], { radius: 6, color: '#0d2c42', weight: 1.5, fillColor: '#ffcc4d', fillOpacity: 1 }).addTo(sailLayer).bindPopup(`${fmtTime(new Date(e.t))} · ${esc(eventLabel(e))}`, { className: 'turnpop' }); });
+    (t.qa || []).filter(q => q && q.id === 'race' && q.course).forEach(r => drawCourse(r.course, sailLayer));
     // title, story, and the wind as it was
     $('#sb-name').textContent = t.name || new Date(t.started).toLocaleDateString();
     $('#sb-sub').textContent = new Date(t.started).toLocaleDateString() + ' ' + fmtTime(new Date(t.started)) + ' to ' + fmtTime(new Date(t.ended)) + ' · ' + a.nm.toFixed(1) + ' nm' + (t.wind ? ' · wind ' + compass(t.wind.from) + ' ' + Math.round(t.wind.kn) + ' kn' : '') + ' · tap for the overview';
@@ -1310,7 +1649,7 @@ const SA = (() => {
   $('#nudge-cancel').addEventListener('click', () => endNudge(false));
 
   function renderMarks() {
-    renderTracks(); renderSyncStatus(); try { renderAwards(); renderSeasonStats(); } catch (e) { console.warn('awards', e); } const el = $('#marks-list'); const live = liveMarks();
+    renderTracks(); renderSyncStatus(); try { renderAwards(); renderSeasonStats(); renderRaceBoard(); } catch (e) { console.warn('awards', e); } const el = $('#marks-list'); const live = liveMarks();
     if (!live.length) { el.innerHTML = '<span class="muted">No marks yet. On the map, tap the pin button or press and hold on the water.</span>'; return; }
     el.innerHTML = live.map(m => `<div class="markitem"><div class="name">${esc(m.name)}${m.kind === 'place' ? ' <span class="small muted">place</span>' : ''}</div>${m.note ? `<div class="note">${esc(m.note)}</div>` : ''}${m.story ? `<div class="story clamp" data-story="${m.id}">${esc(m.story)}</div><button class="linkbtn" data-more="${m.id}">Read more</button>` : ''}<div class="small muted">${m.lat.toFixed(5)}, ${m.lon.toFixed(5)} · ${new Date(m.at).toLocaleDateString()}${m.by ? ' · ' + esc(m.by) : ''}</div>
       <div class="toolbar"><button class="btn sm" data-go="${m.id}">Show</button><button class="btn sm" data-edit="${m.id}">Edit</button><button class="btn sm" data-nudge="${m.id}">Nudge</button><button class="btn sm danger" data-del="${m.id}">Delete</button></div></div>`).join('');
