@@ -150,18 +150,17 @@
   #rc-clock { color: #e8eef2; white-space: nowrap; }
   #rc-count { text-align: center; font-size: min(26vw, 130px); font-weight: 800; line-height: 1; letter-spacing: -.02em; }
   #rc-count.hidden { display: none; }
-  #rc-nav { display: flex; align-items: center; gap: 14px; justify-content: center; }
-  #rc-arrow { width: min(40vw, 190px); height: min(40vw, 190px); flex: none; transition: transform .4s; }
-  #rc-arrow path { fill: #ff9f40; }
-  #rc-arrow.dim path { fill: #3a4650; }
-  #rc-dbox b { font-size: min(20vw, 100px); font-weight: 800; line-height: 1; display: block; }
-  #rc-dbox span { color: #8fa1ad; font-size: 18px; text-transform: uppercase; letter-spacing: .08em; }
+  #rc-nav { position: relative; flex: 1 1 auto; min-height: 240px; border: 3px solid #5fd38d; border-radius: 14px; background: #05080b; overflow: hidden; }
+  #rc-chart { position: absolute; inset: 0; width: 100%; height: 100%; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+  #rc-dbox { position: absolute; left: 10px; top: 6px; pointer-events: none; text-shadow: 0 0 6px #000; }
+  #rc-dbox b { font-size: min(13vw, 60px); font-weight: 800; line-height: 1; }
+  #rc-dbox span { color: #8fa1ad; font-size: 15px; text-transform: uppercase; letter-spacing: .08em; margin-left: 4px; }
   #rc-sub { text-align: center; color: #c9d4db; font-size: 16px; line-height: 1.35; min-height: 22px; }
   #rc-hint { text-align: center; color: #5fd38d; font-size: 18px; font-weight: 600; min-height: 22px; }
   .rc-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
   .rc-grid > div { border-top: 1px solid #1d2a33; padding-top: 6px; min-width: 0; }
   .rc-grid .l { font-size: 11px; color: #8fa1ad; text-transform: uppercase; letter-spacing: .1em; }
-  .rc-grid .v { font-size: min(13vw, 52px); font-weight: 800; line-height: 1.1; }
+  .rc-grid .v { font-size: min(11vw, 46px); white-space: nowrap; font-weight: 800; line-height: 1.1; }
   .rc-grid .v small { font-size: 14px; color: #8fa1ad; font-weight: 500; margin-left: 2px; }
   .rc-grid.small .v { font-size: 30px; font-weight: 700; }
   .race-mark { width: 24px; height: 24px; border-radius: 50%; background: #ff9f40; color: #1a1a1a; font: 700 14px/24px -apple-system, sans-serif; text-align: center; border: 2px solid #0d2c42; }
@@ -432,7 +431,7 @@
     <div id="sv-race" class="hidden">
       <div id="rc-top"><span id="rc-leg">Olympic course</span><span id="rc-clock"></span></div>
       <div id="rc-count" class="hidden">5:00</div>
-      <div id="rc-nav"><svg id="rc-arrow" viewBox="0 0 100 100" aria-label="direction to the mark"><path d="M50 4 L82 84 L50 66 L18 84 Z"/></svg><div id="rc-dbox"><b id="rc-dist">–</b><span id="rc-unit"></span></div></div>
+      <div id="rc-nav"><svg id="rc-chart" aria-label="course chart"></svg><div id="rc-dbox"><b id="rc-dist">–</b><span id="rc-unit"></span></div></div>
       <div id="rc-sub"></div>
       <div id="rc-hint"></div>
       <div class="rc-grid"><div><div class="l">Heel</div><div class="v" id="rc-heel">–</div></div><div><div class="l">Speed</div><div class="v" id="rc-sog">–</div></div><div><div class="l">Toward mark</div><div class="v" id="rc-vmc">–</div></div></div>
@@ -739,13 +738,14 @@ const SA = (() => {
     return a.t + (b.t - a.t) * k;
   }
 
-  root.RC = { OLYMPIC, ZONE, LINE_HALF, NM, build, legRhumbs, waterFrom, fits, place, lineFrame, crossedUp, dist, bearing, norm };
+  const offset = (p, brg, m) => { const P = xy(p), b = rad(brg); return ll({ x: P.x + Math.sin(b) * m, y: P.y + Math.cos(b) * m }); };
+  root.RC = { xy, offset, OLYMPIC, ZONE, LINE_HALF, NM, build, legRhumbs, waterFrom, fits, place, lineFrame, crossedUp, dist, bearing, norm };
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
 <script>
 (function () {
   'use strict';
-  const APP_VERSION = '6.2';
+  const APP_VERSION = '6.3';
   const LAKE = { lat: 40.975, lon: -96.870, zoom: 14 };
   const DRAFT_FT = 2.5;
   const CONTOUR_URL = "https://services5.arcgis.com/IOshH1zLrIieqrNk/arcgis/rest/services/LakeContours/FeatureServer/0/query"
@@ -1098,6 +1098,49 @@ const SA = (() => {
       L.marker([m.lat, m.lon], { icon: L.divIcon({ className: '', html: `<div class="race-mark">${k}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] }) }).addTo(g).bindPopup(`Mark ${k}, round to port (leave it on your left)`, { className: 'turnpop' }); });
   }
 
+  // Course chart on the race screen (v6.3): the whole course with Buen Camino drawn where she is, pointing where she is going.
+  // Always course up (wind at the top, mark 1 above). Within 130 m of the next
+  // target it zooms in so the mark and its 30 m rounding circle fill the box.
+  function drawRaceChart(r, p, target) {
+    const svg = $('#rc-chart'); if (!svg) return;
+    const co = r.course, rot = co.from; // course up: wind at the top, mark 1 above
+    const P0 = co.line.c, toXY = q => { const a = RC.xy(q), o = RC.xy(P0), dx = a.x - o.x, dy = a.y - o.y, t = -rot * Math.PI / 180; return { x: dx * Math.cos(t) + dy * Math.sin(t) * 1, y: -dx * Math.sin(t) + dy * Math.cos(t) }; };
+    // rotation above: turn the world so bearing `rot` points straight up (screen y grows downward, so flip y when drawing)
+    const S = q => { const v = toXY(q); return { x: v.x, y: -v.y }; };
+    const marks = ['1', '2', '3'].map(k => ({ k, ...S(co.marks[k]) })), pin = S(co.line.pin), rc = S(co.line.rc), boat = p ? S(p) : null, tgt = target ? S(target) : null;
+    const dT = p && target ? RC.dist(p, target) : null, close = dT != null && dT < 130;
+    let pts = close ? [boat, tgt] : marks.concat([pin, rc]).concat(boat ? [boat] : []), pad = close ? 45 : 40;
+    let x0 = Math.min(...pts.map(q => q.x)) - pad, x1 = Math.max(...pts.map(q => q.x)) + pad, y0 = Math.min(...pts.map(q => q.y)) - pad * 1.8, y1 = Math.max(...pts.map(q => q.y)) + pad;
+    const W = svg.clientWidth || 340, H = svg.clientHeight || 300, sc = Math.min(W / (x1 - x0), H / (y1 - y0)), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const X = q => (W / 2 + (q.x - cx) * sc).toFixed(1), Y = q => (H / 2 + (q.y - cy) * sc).toFixed(1);
+    const nextKey = r.phase === 'racing' && r.start ? RC.OLYMPIC.legs[r.leg].to : 'S';
+    const done = new Set(); if (r.phase === 'racing' && r.start) for (let i = 0; i < r.leg; i++) done.add(i);
+    let g = '';
+    // legs, the next one bright
+    const pos = k => k === 'S' || k === 'F' ? S(co.line.c) : marks.find(m => m.k === k);
+    let prev = 'S'; RC.OLYMPIC.legs.forEach((l, i) => { const a = pos(prev), b = pos(l.to); const cur = r.phase === 'racing' && r.start && i === r.leg; g += `<line x1="${X(a)}" y1="${Y(a)}" x2="${X(b)}" y2="${Y(b)}" stroke="${cur ? '#ff9f40' : '#3a4650'}" stroke-width="${cur ? 2 : 1.2}" stroke-dasharray="${cur ? '' : '4 5'}" opacity="${done.has(i) ? .35 : 1}"/>`; prev = l.to; });
+    // laylines into the windward mark while beating to it (45 degrees each side of the wind)
+    const leg = RC.OLYMPIC.legs[r.leg];
+    if (r.phase === 'racing' && r.start && leg.kind === 'beat' && leg.to === '1') { const m = co.marks[1]; [co.from + 180 - 45, co.from + 180 + 45].forEach(b => { const far = S(RC.offset(m, b, 1000)), mm = S(m); g += `<line x1="${X(mm)}" y1="${Y(mm)}" x2="${X(far)}" y2="${Y(far)}" stroke="#5fd38d" stroke-width="1" stroke-dasharray="2 4" opacity=".7"/>`; }); }
+    // start and finish line
+    const lineHot = nextKey === 'S' || nextKey === 'F';
+    g += `<line x1="${X(pin)}" y1="${Y(pin)}" x2="${X(rc)}" y2="${Y(rc)}" stroke="${lineHot ? '#ffffff' : '#8fa1ad'}" stroke-width="${lineHot ? 4 : 2.5}" stroke-linecap="round"/>`;
+    // marks with their rounding circle to scale
+    marks.forEach(m => { const hot = m.k === nextKey, zr = Math.max(RC.ZONE * sc, hot ? 9 : 6);
+      g += `<circle cx="${X(m)}" cy="${Y(m)}" r="${(RC.ZONE * sc).toFixed(1)}" fill="${hot ? 'rgba(255,159,64,.14)' : 'none'}" stroke="${hot ? '#ff9f40' : '#3a4650'}" stroke-width="1"/>`;
+      g += `<circle cx="${X(m)}" cy="${Y(m)}" r="${hot ? 11 : 8}" fill="${hot ? '#ff9f40' : '#11181e'}" stroke="${hot ? '#ffd2a6' : '#5a6873'}" stroke-width="2"/><text x="${X(m)}" y="${(+Y(m) + 4.5).toFixed(1)}" text-anchor="middle" font-size="${hot ? 14 : 11}" font-weight="700" fill="${hot ? '#1a1a1a' : '#8fa1ad'}">${m.k}</text>`; });
+    // the last 90 seconds of track behind the boat
+    const recent = track.filter(q => q.t > Date.now() - 90000); if (recent.length > 1) g += `<polyline points="${recent.map(q => { const s = S(q); return X(s) + ',' + Y(s); }).join(' ')}" fill="none" stroke="#4fb2e7" stroke-width="2" opacity=".55"/>`;
+    // dotted line from the boat to the next target, then Buen Camino
+    if (boat && tgt) g += `<line x1="${X(boat)}" y1="${Y(boat)}" x2="${X(tgt)}" y2="${Y(tgt)}" stroke="#ff9f40" stroke-width="1.2" stroke-dasharray="1 4" stroke-linecap="round"/>`;
+    if (boat) { const hd = lastCog != null && lastKn > 0.8 ? lastCog - rot : null;
+      g += hd == null ? `<circle cx="${X(boat)}" cy="${Y(boat)}" r="6" fill="#4fb2e7" stroke="#fff" stroke-width="2"/>`
+        : `<g transform="translate(${X(boat)} ${Y(boat)}) rotate(${hd.toFixed(1)})"><path d="M0 -13 C6 -6 6.5 3 4.5 11 L-4.5 11 C-6.5 3 -6 -6 0 -13 Z" fill="#4fb2e7" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/></g>`; }
+    // wind arrow (where it comes from) and the view name
+    const wr = co.from - rot; g += `<g transform="translate(${W - 22} ${H / 2 - 10}) rotate(${wr.toFixed(1)})"><path d="M0 12 L6 -2 L1.5 -1 L1.5 -12 L-1.5 -12 L-1.5 -1 L-6 -2 Z" fill="#8fa1ad"/></g><text x="${W - 22}" y="${H / 2 + 20}" text-anchor="middle" font-size="10" fill="#8fa1ad">WIND</text>`;
+    if (close) g += `<text x="10" y="${H - 10}" font-size="12" fill="#5fd38d">Close in</text>`;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = g;
+  }
   // Setup sheet: wind, size, where to lay it
   let rsWind = null, rsSize = 0.35, rsWhere = 'near';
   function openRaceSetup() {
@@ -1149,9 +1192,9 @@ const SA = (() => {
     raceEvent(leg.to === 'F' ? 'Finish' : 'Rounded mark ' + leg.to, now);
     if (leg.to === 'F') { r.finish = now; r.elapsed = now - r.gun; horn(); endRace('finished'); return; }
     beep(990, 250); beep(1320, 250); raceFlashUntil = Date.now() + 800;
-    r.leg++; raceSave(); toast('Mark ' + leg.to + ' rounded · ' + fmtClock(now - from), 3000);
+    r.leg++; r.lastStep = Date.now(); raceSave(); toast('Mark ' + leg.to + ' rounded · ' + fmtClock(now - from), 3000);
   }
-  function raceStarted(t) { race.start = Math.round(t); raceEvent('Started', t); beep(1320, 200); raceSave(); }
+  function raceStarted(t) { race.start = Math.round(t); race.lastStep = Date.now(); raceEvent('Started', t); beep(1320, 200); raceSave(); }
 
   // called from onPos with each good fix
   function raceOnPos(p) {
@@ -1196,18 +1239,18 @@ const SA = (() => {
     $('#rc-leg').textContent = label;
     $('#rc-clock').textContent = r.phase === 'racing' ? fmtClock(Math.max(0, now - r.gun)) : r.phase === 'count' ? 'Gun at ' + fmtTime(new Date(r.gun)) : 'Course laid';
     if (r.phase === 'count') { const left = r.gun - now; count.textContent = fmtClock(Math.max(0, left)); count.style.color = left <= 60000 ? '#ff5a5a' : left <= 240000 ? '#e2b84a' : '#e8eef2'; }
-    const arrow = $('#rc-arrow');
     if (p && target) {
       const d = RC.dist(p, target), brg = RC.bearing(p, target), fd = fmtDist(d);
       $('#rc-dist').textContent = fd.v; $('#rc-unit').textContent = fd.u;
-      if (lastCog != null && lastKn > 0.8) { const rel = angDiff(brg, lastCog); arrow.style.transform = `rotate(${rel}deg)`; arrow.classList.remove('dim'); sub = (sub ? sub + '<br>' : '') + Math.round(brg) + '° · ' + (Math.abs(rel) < 6 ? 'dead ahead' : Math.round(Math.abs(rel)) + '° to ' + (rel < 0 ? 'port' : 'starboard')); }
-      else { arrow.style.transform = 'rotate(0deg)'; arrow.classList.add('dim'); sub = (sub ? sub + '<br>' : '') + 'Steer ' + Math.round(brg) + '° (arrow works once moving)'; }
+      if (lastCog != null && lastKn > 0.8) { const rel = angDiff(brg, lastCog); sub = (sub ? sub + '<br>' : '') + Math.round(brg) + '° · ' + (Math.abs(rel) < 6 ? 'dead ahead' : Math.round(Math.abs(rel)) + '° to ' + (rel < 0 ? 'port' : 'starboard')); }
+      else { sub = (sub ? sub + '<br>' : '') + 'Steer ' + Math.round(brg) + '°'; }
       // speed toward the target
       const vmc = lastKn != null && lastCog != null ? lastKn * Math.cos((brg - lastCog) * Math.PI / 180) : null;
       $('#rc-vmc').innerHTML = vmc != null ? vmc.toFixed(1) + '<small>kn</small>' : '–';
       $('#rc-hint').textContent = raceHint(r, brg);
-    } else { $('#rc-dist').textContent = '–'; $('#rc-unit').textContent = ''; arrow.classList.add('dim'); sub = 'Waiting for GPS'; $('#rc-vmc').textContent = '–'; $('#rc-hint').textContent = ''; }
+    } else { $('#rc-dist').textContent = '–'; $('#rc-unit').textContent = ''; sub = 'Waiting for GPS'; $('#rc-vmc').textContent = '–'; $('#rc-hint').textContent = ''; }
     $('#rc-sub').innerHTML = sub;
+    try { drawRaceChart(r, p, target); } catch (e) { console.warn('chart', e); }
     $('#rc-heel').innerHTML = heelOn && heelCur != null ? Math.round(Math.abs(heelCur)) + '<small>°</small>' : '–';
     $('#rc-heel').style.color = heelOn && heelCur != null ? (Math.round(Math.abs(heelCur)) >= 21 ? '#ff5a5a' : Math.round(Math.abs(heelCur)) >= 15 ? '#e2b84a' : '#5fd38d') : '';
     $('#rc-sog').innerHTML = lastKn != null ? lastKn.toFixed(1) + '<small>kn</small>' : '–';
@@ -1254,8 +1297,9 @@ const SA = (() => {
     if (!race) return;
     if (race.phase === 'pre') return startCountdown(5);
     if (race.phase === 'count') { if (confirm('Fire the gun now?')) { race.gun = Date.now(); raceTick(); saverRender(); } return; }
-    if (!race.start) return raceStarted(Date.now());
-    roundMark(Date.now()); saverRender();
+    if (race.lastStep && Date.now() - race.lastStep < 6000) { toast('Just logged. Wait a few seconds before the next tap.', 2500); return; }
+    if (!race.start) { raceStarted(Date.now()); race.lastStep = Date.now(); saverRender(); return; }
+    roundMark(Date.now()); if (race) race.lastStep = Date.now(); saverRender();
   });
   $('#rc-end').addEventListener('click', () => { if (!race) return; if (race.phase === 'racing') { if (confirm('End this race? It is saved as not finished.')) endRace('dnf'); } else { race = null; raceSave(); drawCourse(null); saverRender(); } });
   $('#rc-map').addEventListener('click', () => $('#sv-map').click());
